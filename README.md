@@ -1,4 +1,4 @@
-# sen66-esp32
+# sensirion-sen66-esp32
 
 This project is for the ESP32 and uses PlatformIO. It is designed for collecting sensor data (with the Sensirion Sen66) and sending this data to ThingSpeak.
 
