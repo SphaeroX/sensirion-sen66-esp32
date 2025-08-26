@@ -163,6 +163,8 @@ The driver checks CRC bytes and treats special raw codes as invalid. For example
 
 ## Hardware
 
+![Hardware](images/hardware.jpg)
+
 * **MCU**: Seeed Studio XIAO ESP32‑S3
 * **Sensor**: Sensirion SEN66
 * **I²C**: default pins SDA 6 and SCL 7 unless you override in `platformio.ini`
@@ -172,20 +174,18 @@ Wire SEN66 I²C and power according to the datasheet. Keep leads short for clean
 
 ---
 
+## ThingSpeak Data Visualization
+
+![ThingSpeak Data](images/thingshow.jpg)
+
+---
+
 ## Project structure
 
 * `src/` main application
 * `lib/` self written libraries `Sen66` and `ThingSpeakClient`
 * `include/` configuration headers
 * `platformio.ini` PlatformIO configuration
-
----
-
-## Troubleshooting
-
-* Build fails with `operator""c` in `platformio.ini` then remove accidental characters from numeric defines such as `100000c` and use `100000UL`
-* No readings then check I²C pins and pull ups then confirm address `0x6B`
-* No ThingSpeak updates then check Wi‑Fi and API keys then increase the interval to respect rate limits
 
 ---
 
