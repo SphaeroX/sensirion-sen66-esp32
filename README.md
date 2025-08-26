@@ -1,69 +1,194 @@
 # sensirion-sen66-esp32
 
-This project is for the ESP32 and uses PlatformIO. It is designed for collecting sensor data (with the Sensirion Sen66) and sending this data to ThingSpeak.
+This project targets the **Seeed Studio XIAO ESP32‑S3** using PlatformIO. It reads a **Sensirion SEN66** and uploads all available signals to **ThingSpeak** using self written libraries only.
+
+---
 
 ## Getting Started
 
-### 1. Clone the Project
+### 1. Clone the project
 
 ```bash
 git clone https://github.com/SphaeroX/sensirion-sen66-esp32.git
 cd sensirion-sen66-esp32
 ```
 
-### 2. Configuration
+### 2. Configure credentials and channels
 
-Before compiling and uploading the project to your ESP32, you need to configure it.
+1. Copy the example config and edit your values.
 
-1.  Copy the file [`include/example_config.h`](include/example_config.h) and rename it to `include/config.h`:
+   ```bash
+   cp include/example_config.h include/config.h
+   ```
 
-    ```bash
-    cp include/example_config.h include/config.h
-    ```
+2. Open `include/config.h` and set
 
-2.  Open the newly created file [`include/config.h`](include/config.h) and fill in the placeholders with your specific values (e.g., Wi-Fi credentials, ThingSpeak API key).
+   * Wi‑Fi SSID and password
+   * ThingSpeak channel IDs and API keys
+   * Optional measurement interval
 
-    ```c++
-    // Example in include/config.h
-    #define WIFI_SSID "Your_WiFi_Name"
-    #define WIFI_PASSWORD "Your_WiFi_Password"
-    #define THINGSPEAK_API_KEY "Your_ThingSpeak_API_Key"
-    // ... further configurations
-    ```
+   ```cpp
+   // Wi‑Fi
+   #define WIFI_SSID     "Your_WiFi_Name"
+   #define WIFI_PASSWORD "Your_WiFi_Password"
 
-### 3. Compile and Upload
+   // ThingSpeak
+   // Channel A: PM mass + RH + T + VOC index + NOx index
+   #define TS_CHANNEL_A_ID     0000000UL
+   #define TS_CHANNEL_A_APIKEY "YOUR_API_KEY_A"
 
-Ensure PlatformIO is installed. Then you can compile and upload the project to your ESP32:
+   // Channel B: CO2 + number concentrations + status
+   #define TS_CHANNEL_B_ID     0000000UL
+   #define TS_CHANNEL_B_APIKEY "YOUR_API_KEY_B"
+
+   // Minimum 15 s for ThingSpeak free tier
+   #define MEASUREMENT_INTERVAL_MS 20000UL
+   ```
+
+### 3. I²C pins and speed
+
+Default I²C pins for XIAO ESP32‑S3 are `SDA = 6` and `SCL = 7`. If your wiring differs you can override pins and bus speed in `platformio.ini`.
+
+```ini
+; platformio.ini (snippet)
+[env:seeed_xiao_esp32s3]
+build_flags =
+  -DCORE_DEBUG_LEVEL=3
+  -DSEN66_I2C_SDA=6
+  -DSEN66_I2C_SCL=7
+  -DSEN66_I2C_FREQ=100000UL   ; use 400000UL for Fast Mode
+```
+
+### 4. Build and upload
 
 ```bash
 platformio run --target upload
 ```
 
+After upload open the serial monitor. You should see fresh readings and ThingSpeak update confirmations.
+
+---
+
+## ThingSpeak mapping
+
+The sketch uses two channels. Adjust if you prefer a single channel.
+
+**Channel A**
+
+* field1 → PM1.0 mass \[µg/m³]
+* field2 → PM2.5 mass \[µg/m³]
+* field3 → PM4.0 mass \[µg/m³]
+* field4 → PM10 mass \[µg/m³]
+* field5 → Relative Humidity RH \[%]
+* field6 → Temperature \[°C]
+* field7 → VOC Index
+* field8 → NOx Index
+
+**Channel B**
+
+* field1 → CO₂ \[ppm]
+* field2 → NC0.5 number concentration \[#/cm³]
+* field3 → NC1.0 number concentration \[#/cm³]
+* field4 → NC2.5 number concentration \[#/cm³]
+* field5 → NC4.0 number concentration \[#/cm³]
+* field6 → NC10 number concentration \[#/cm³]
+* field7 → Status flags as unsigned integer
+
+ThingSpeak free tier accepts one update at least every 15 seconds. Keep the interval equal or longer to avoid throttling.
+
+---
+
+## What each value means
+
+### PM mass concentrations
+
+**PM1.0**, **PM2.5**, **PM4.0**, **PM10** measure the **mass** of airborne particles inside the respective size fractions. Units are **micrograms per cubic meter**. The sensor reports values for multiple size cuts which lets you see how much dust is present in different bands. A rise in PM2.5 often reflects smoke or fine dust. A rise in PM10 can reflect coarse dust.
+
+Key points
+
+* Mass is dominated by larger particles because mass scales with diameter cubed
+* Units: µg per m³
+* Good air typically shows low double digit or single digit values indoors
+
+### Number concentrations
+
+**NC0.5**, **NC1.0**, **NC2.5**, **NC4.0**, **NC10** measure **counts of particles** in each size band. Units are **particles per cubic centimeter** written as `#/cm³`.
+
+Key points
+
+* Number is dominated by smaller particles because they are more numerous
+* Units: particles per cm³
+* This metric responds strongly to ultrafine sources like cooking aerosols or sprays
+
+**PM vs NC**
+
+* PM answers the question how much particulate **mass** is in the air
+* NC answers the question how many **particles** are in the air
+* You can see high NC with low PM when there are many very small particles with tiny mass
+* You can see low NC with high PM when fewer but larger particles carry most of the mass
+
+### Relative Humidity and Temperature
+
+* **RH** is **relative humidity** in percent and shows how much water vapor is present compared to saturation at the same temperature
+* **Temperature** is in **degrees Celsius**
+
+These two help you correct interpretation of particle readings. Very high humidity can raise apparent particle mass due to hygroscopic growth in some environments.
+
+### VOC Index
+
+**VOC Index** is a unitless indicator derived from a gas sensor that responds to a broad range of **volatile organic compounds**. Values rise with higher estimated VOC exposure. Interpret the trend over minutes and hours rather than single samples.
+
+Typical use
+
+* Watch for spikes from cleaning agents or paints
+* Track decay after ventilation
+
+### NOx Index
+
+**NOx Index** is a unitless indicator related to oxidizing nitrogen compounds from sources like traffic or combustion. Higher values mean higher estimated exposure. Allow a short warm up after power up before you rely on the number.
+
+### CO₂
+
+**CO₂** is reported in **ppm**. It correlates with occupancy and ventilation. Lower is generally better indoors. Many people target values well below 1000 ppm for comfort.
+
+### Status flags
+
+A 32‑bit integer that encodes device status and data validity bits. Zero usually means no warnings. Non zero values can indicate temporary invalid data during warm up or maintenance events. You can log this field to catch rare issues.
+
+### Data validity in the library
+
+The driver checks CRC bytes and treats special raw codes as invalid. For example a raw value that equals the data type maximum is considered not available. Invalid readings become `NaN` in the printed output and are not sent to ThingSpeak fields.
+
+---
+
 ## Hardware
 
-This project is designed to be used with the **Seeed Studio XIAO ESP32-S3** development board. This board is ideal for portable applications due to its integrated LiPo battery connector and charging circuit.
+* **MCU**: Seeed Studio XIAO ESP32‑S3
+* **Sensor**: Sensirion SEN66
+* **I²C**: default pins SDA 6 and SCL 7 unless you override in `platformio.ini`
+* **Power**: XIAO has on board LiPo charging which is useful for portable logging
 
-![Hardware](images/hardware.jpg)
+Wire SEN66 I²C and power according to the datasheet. Keep leads short for clean signals.
 
-## ThingSpeak Data Visualization
+---
 
-The collected sensor data is sent to ThingSpeak and can be visualized there.
+## Project structure
 
-![ThingSpeak Data](images/thingshow.jpg)
+* `src/` main application
+* `lib/` self written libraries `Sen66` and `ThingSpeakClient`
+* `include/` configuration headers
+* `platformio.ini` PlatformIO configuration
 
-## Project Structure
+---
 
-*   `src/`: Main source code of the project.
-*   `lib/`: Libraries used in the project (e.g., Sen66, ThingSpeakClient).
-*   `include/`: Header files, including the configuration file.
-*   `platformio.ini`: PlatformIO project configuration file.
+## Troubleshooting
 
-## Used Libraries
+* Build fails with `operator""c` in `platformio.ini` then remove accidental characters from numeric defines such as `100000c` and use `100000UL`
+* No readings then check I²C pins and pull ups then confirm address `0x6B`
+* No ThingSpeak updates then check Wi‑Fi and API keys then increase the interval to respect rate limits
 
-*   **Sen66**: For communication with the Sen66 sensor.
-*   **ThingSpeakClient**: For sending data to ThingSpeak.
-*   **WiFi**: Standard ESP32 library for Wi-Fi connectivity.
+---
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE).
+This project is licensed under the MIT License. See `LICENSE` for details.
