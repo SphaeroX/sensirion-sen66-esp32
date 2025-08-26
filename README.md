@@ -43,6 +43,14 @@ platformio run --target upload
 
 This project is designed to be used with the **Seeed Studio XIAO ESP32-S3** development board. This board is ideal for portable applications due to its integrated LiPo battery connector and charging circuit.
 
+![Hardware](images/hardware.jpg)
+
+## ThingSpeak Data Visualization
+
+The collected sensor data is sent to ThingSpeak and can be visualized there.
+
+![ThingSpeak Data](images/thingshow.jpg)
+
 ## Project Structure
 
 *   `src/`: Main source code of the project.
