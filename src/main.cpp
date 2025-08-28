@@ -74,6 +74,11 @@ static void sendToInflux(const Sen66::MeasuredValues &mv, const Sen66::NumberCon
                 ",voc=" + f2s(mv.voc_index, 1) +
                 ",nox=" + f2s(mv.nox_index, 1) +
                 ",co2=" + f2s(mv.co2_ppm, 0) +
+                ",nc0_5=" + f2s(nc.nc0_5, 1) +
+                ",nc1_0=" + f2s(nc.nc1_0, 1) +
+                ",nc2_5=" + f2s(nc.nc2_5, 1) +
+                ",nc4_0=" + f2s(nc.nc4_0, 1) +
+                ",nc10="  + f2s(nc.nc10_0, 1) +
                 ",status=" + String((unsigned long)statusFlags);
   http.begin(url);
   http.addHeader("Authorization", String("Token ") + INFLUXDB_TOKEN);
