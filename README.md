@@ -56,6 +56,8 @@ After upload open the serial monitor. You should see fresh readings and InfluxDB
 
 ## InfluxDB & Dashboard Server
 
+![Dashboard](images/dashboard.png)
+
 This project streams sensor data to InfluxDB (v2). A Node/Express server under `dashboard/` queries InfluxDB on the server side and serves a mobile‑friendly web UI.
 
 - Data sink: InfluxDB v2 using `INFLUXDB_URL`, `INFLUXDB_ORG`, `INFLUXDB_BUCKET`, `INFLUXDB_TOKEN` from `.env`.
