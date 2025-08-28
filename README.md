@@ -1,9 +1,10 @@
 # sensirion-sen66-esp32
 
-This project targets the **Seeed Studio XIAO ESP32‑S3** using PlatformIO. It reads a **Sensirion SEN66** and uploads all available signals to **ThingSpeak** using self written libraries only.
+This project targets the **Seeed Studio XIAO ESP32‑S3** using PlatformIO. It reads a **Sensirion SEN66** and streams measurements to **InfluxDB**.
+
+A companion Express.js dashboard located in `/dashboard` visualizes the data on mobile devices.
 
 ---
-
 ## Getting Started
 
 ### 1. Clone the project
@@ -15,35 +16,19 @@ cd sensirion-sen66-esp32
 
 ### 2. Configure credentials and channels
 
-1. Copy the example config and edit your values.
+1. Copy the environment template and edit your values. All components read from this file.
 
    ```bash
-   cp include/example_config.h include/config.h
+   cp .env.example .env
    ```
 
-2. Open `include/config.h` and set
+2. Load the variables before building or starting the dashboard:
 
-   * Wi‑Fi SSID and password
-   * ThingSpeak channel IDs and API keys
-   * Optional measurement interval
-
-   ```cpp
-   // Wi‑Fi
-   #define WIFI_SSID     "Your_WiFi_Name"
-   #define WIFI_PASSWORD "Your_WiFi_Password"
-
-   // ThingSpeak
-   // Channel A: PM mass + RH + T + VOC index + NOx index
-   #define TS_CHANNEL_A_ID     0000000UL
-   #define TS_CHANNEL_A_APIKEY "YOUR_API_KEY_A"
-
-   // Channel B: CO2 + number concentrations + status
-   #define TS_CHANNEL_B_ID     0000000UL
-   #define TS_CHANNEL_B_APIKEY "YOUR_API_KEY_B"
-
-   // Minimum 15 s for ThingSpeak free tier
-   #define MEASUREMENT_INTERVAL_MS 20000UL
+   ```bash
+   set -a; source .env; set +a
    ```
+
+   The PlatformIO build will generate `include/config.h` automatically from these variables.
 
 ### 3. I²C pins and speed
 
@@ -65,36 +50,31 @@ build_flags =
 platformio run --target upload
 ```
 
-After upload open the serial monitor. You should see fresh readings and ThingSpeak update confirmations.
+After upload open the serial monitor. You should see fresh readings and InfluxDB write confirmations.
 
 ---
 
-## ThingSpeak mapping
+## InfluxDB & Dashboard Server
 
-The sketch uses two channels. Adjust if you prefer a single channel.
+![Dashboard](images/dashboard.png)
 
-**Channel A**
+This project streams sensor data to InfluxDB (v2). A Node/Express server under `dashboard/` queries InfluxDB on the server side and serves a mobile‑friendly web UI.
 
-* field1 → PM1.0 mass \[µg/m³]
-* field2 → PM2.5 mass \[µg/m³]
-* field3 → PM4.0 mass \[µg/m³]
-* field4 → PM10 mass \[µg/m³]
-* field5 → Relative Humidity RH \[%]
-* field6 → Temperature \[°C]
-* field7 → VOC Index
-* field8 → NOx Index
+- Data sink: InfluxDB v2 using `INFLUXDB_URL`, `INFLUXDB_ORG`, `INFLUXDB_BUCKET`, `INFLUXDB_TOKEN` from `.env`.
+- Server: Express.js + ApexCharts frontend in `dashboard/`.
+- Default view shows last 24h; you can change time range and resolution.
 
-**Channel B**
+Quick start for the dashboard server:
 
-* field1 → CO₂ \[ppm]
-* field2 → NC0.5 number concentration \[#/cm³]
-* field3 → NC1.0 number concentration \[#/cm³]
-* field4 → NC2.5 number concentration \[#/cm³]
-* field5 → NC4.0 number concentration \[#/cm³]
-* field6 → NC10 number concentration \[#/cm³]
-* field7 → Status flags as unsigned integer
+```bash
+cd dashboard
+npm install
+npm start
+```
 
-ThingSpeak free tier accepts one update at least every 15 seconds. Keep the interval equal or longer to avoid throttling.
+The server listens on port 3000 by default and expects the same `.env` file at the repo root.
+
+See the detailed server documentation here: dashboard/README.md
 
 ---
 
@@ -157,7 +137,7 @@ A 32‑bit integer that encodes device status and data validity bits. Zero usual
 
 ### Data validity in the library
 
-The driver checks CRC bytes and treats special raw codes as invalid. For example a raw value that equals the data type maximum is considered not available. Invalid readings become `NaN` in the printed output and are not sent to ThingSpeak fields.
+The driver checks CRC bytes and treats special raw codes as invalid. For example a raw value that equals the data type maximum is considered not available. Invalid readings become `NaN` in the printed output and are not sent to InfluxDB.
 
 ---
 
@@ -174,18 +154,48 @@ Wire SEN66 I²C and power according to the datasheet. Keep leads short for clean
 
 ---
 
-## ThingSpeak Data Visualization
-
-![ThingSpeak Data](images/thingshow.jpg)
-
----
 
 ## Project structure
 
 * `src/` main application
-* `lib/` self written libraries `Sen66` and `ThingSpeakClient`
+* `lib/` self written library `Sen66`
 * `include/` configuration headers
+* `dashboard/` Express.js server and web dashboard using InfluxDB
 * `platformio.ini` PlatformIO configuration
+
+---
+
+## Deploying the dashboard to Azure
+
+The dashboard is an Express.js app and can run on **Azure App Service**.
+
+1. Install dependencies and run the test script:
+
+   ```bash
+   cd dashboard
+   npm install
+   npm test
+   ```
+
+2. Deploy using the Azure CLI:
+
+   ```bash
+   az login
+   az webapp up \
+       --runtime "node|18-lts" \
+       --name sen66-dashboard \
+       --resource-group <RESOURCE_GROUP> \
+       --src-path dashboard
+   ```
+
+3. Push the environment variables from your `.env` file:
+
+   ```bash
+   az webapp config appsettings set \
+       --name sen66-dashboard \
+       --resource-group <RESOURCE_GROUP> \
+       --settings $(cat .env | xargs)
+   ```
 
 ---
 

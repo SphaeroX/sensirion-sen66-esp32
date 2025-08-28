@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Air Quality Dashboard</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+</head>
+<body>
+  <header>
+    <h1>Air Quality</h1>
+  </header>
+  <main>
+    <section id="controls">
+      <div class="control-row">
+        <label for="preset">Zeitraum:</label>
+        <select id="preset">
+          <option value="-24h" selected>Letzte 24 Stunden</option>
+          <option value="-7d">Letzte 7 Tage</option>
+          <option value="-30d">Letzte 30 Tage</option>
+          <option value="-3h">Letzte 3 Stunden</option>
+          <option value="custom">Benutzerdefiniert…</option>
+        </select>
+        <span id="custom-range" class="hidden">
+          <input type="text" id="range-input" placeholder="z.B. -12h oder -2d" />
+        </span>
+        <label for="every">Auflösung:</label>
+        <select id="every">
+          <option value="">Rohdaten</option>
+          <option value="1m" selected>1 Minute</option>
+          <option value="5m">5 Minuten</option>
+          <option value="15m">15 Minuten</option>
+          <option value="1h">1 Stunde</option>
+        </select>
+        <button id="refresh">Aktualisieren</button>
+      </div>
+      <div class="control-row">
+        <span>Datenreihen:</span>
+        <label><input type="checkbox" class="field" value="iaq" checked /> IAQ (0–100)</label>
+        <label><input type="checkbox" class="field" value="co2" checked /> CO2 (ppm)</label>
+        <label><input type="checkbox" class="field" value="temperature" checked /> Temperatur (°C)</label>
+        <label><input type="checkbox" class="field" value="humidity" checked /> Luftfeuchte (%)</label>
+        <label><input type="checkbox" class="field" value="pm2_5" /> PM2.5 (µg/m³)</label>
+        <label><input type="checkbox" class="field" value="pm10" /> PM10 (µg/m³)</label>
+        <label><input type="checkbox" class="field" value="voc" /> VOC (Index)</label>
+        <label><input type="checkbox" class="field" value="nox" /> NOx (Index)</label>
+      </div>
+    </section>
+    <section id="current">
+      <h2>Current Values</h2>
+      <ul>
+        <li>IAQ: <span id="iaq">-</span> (0=best, 100=worst)</li>
+        <li>CO2: <span id="co2">-</span> ppm</li>
+        <li>Temperature: <span id="temp">-</span> °C</li>
+        <li>Humidity: <span id="hum">-</span> %</li>
+      </ul>
+    </section>
+    <section id="chart-section">
+      <div id="chart"></div>
+    </section>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>
