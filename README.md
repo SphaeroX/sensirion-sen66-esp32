@@ -2,6 +2,8 @@
 
 This project targets the **Seeed Studio XIAO ESP32‑S3** using PlatformIO. It reads a **Sensirion SEN66** and uploads all available signals to **ThingSpeak** using self written libraries only.
 
+Additionally the firmware can stream measurements to **InfluxDB** and a companion Express.js dashboard located in `/dashboard` visualizes the data on mobile devices.
+
 ---
 
 ## Getting Started
@@ -15,35 +17,19 @@ cd sensirion-sen66-esp32
 
 ### 2. Configure credentials and channels
 
-1. Copy the example config and edit your values.
+1. Copy the environment template and edit your values. All components read from this file.
 
    ```bash
-   cp include/example_config.h include/config.h
+   cp .env.example .env
    ```
 
-2. Open `include/config.h` and set
+2. Load the variables before building or starting the dashboard:
 
-   * Wi‑Fi SSID and password
-   * ThingSpeak channel IDs and API keys
-   * Optional measurement interval
-
-   ```cpp
-   // Wi‑Fi
-   #define WIFI_SSID     "Your_WiFi_Name"
-   #define WIFI_PASSWORD "Your_WiFi_Password"
-
-   // ThingSpeak
-   // Channel A: PM mass + RH + T + VOC index + NOx index
-   #define TS_CHANNEL_A_ID     0000000UL
-   #define TS_CHANNEL_A_APIKEY "YOUR_API_KEY_A"
-
-   // Channel B: CO2 + number concentrations + status
-   #define TS_CHANNEL_B_ID     0000000UL
-   #define TS_CHANNEL_B_APIKEY "YOUR_API_KEY_B"
-
-   // Minimum 15 s for ThingSpeak free tier
-   #define MEASUREMENT_INTERVAL_MS 20000UL
+   ```bash
+   set -a; source .env; set +a
    ```
+
+   The PlatformIO build will generate `include/config.h` automatically from these variables.
 
 ### 3. I²C pins and speed
 
@@ -185,7 +171,42 @@ Wire SEN66 I²C and power according to the datasheet. Keep leads short for clean
 * `src/` main application
 * `lib/` self written libraries `Sen66` and `ThingSpeakClient`
 * `include/` configuration headers
+* `dashboard/` Express.js server and web dashboard using InfluxDB
 * `platformio.ini` PlatformIO configuration
+
+---
+
+## Deploying the dashboard to Azure
+
+The dashboard is an Express.js app and can run on **Azure App Service**.
+
+1. Install dependencies and run the test script:
+
+   ```bash
+   cd dashboard
+   npm install
+   npm test
+   ```
+
+2. Deploy using the Azure CLI:
+
+   ```bash
+   az login
+   az webapp up \
+       --runtime "node|18-lts" \
+       --name sen66-dashboard \
+       --resource-group <RESOURCE_GROUP> \
+       --src-path dashboard
+   ```
+
+3. Push the environment variables from your `.env` file:
+
+   ```bash
+   az webapp config appsettings set \
+       --name sen66-dashboard \
+       --resource-group <RESOURCE_GROUP> \
+       --settings $(cat .env | xargs)
+   ```
 
 ---
 

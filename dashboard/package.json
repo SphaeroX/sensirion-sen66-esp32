@@ -1,0 +1,14 @@
+{
+  "name": "sensor-dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "test": "echo \"No tests\""
+  },
+  "dependencies": {
+    "@influxdata/influxdb-client": "^1.33.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2"
+  }
+}

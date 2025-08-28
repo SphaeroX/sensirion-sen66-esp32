@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Air Quality Dashboard</title>
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <header>
+    <h1>Air Quality</h1>
+  </header>
+  <main>
+    <section id="current">
+      <h2>Current Values</h2>
+      <ul>
+        <li>CO2: <span id="co2">-</span> ppm</li>
+        <li>Temperature: <span id="temp">-</span> °C</li>
+        <li>Humidity: <span id="hum">-</span> %</li>
+      </ul>
+    </section>
+    <section id="chart-section">
+      <canvas id="chart"></canvas>
+    </section>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>

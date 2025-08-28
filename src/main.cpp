@@ -6,6 +6,7 @@
 #include "config.h"
 #include "Sen66.h"
 #include "ThingSpeakClient.h"
+#include <HTTPClient.h>
 
 Sen66 sen66(Wire);
 ThingSpeakClient ts;
@@ -58,6 +59,31 @@ static String f2s(float v, uint8_t digits = 2)
     return "";
   // Disambiguate constructor by casting to unsigned int
   return String(v, static_cast<unsigned int>(digits));
+}
+
+static void sendToInflux(const Sen66::MeasuredValues &mv, const Sen66::NumberConcentration &nc, uint32_t statusFlags)
+{
+  if (WiFi.status() != WL_CONNECTED)
+    return;
+  HTTPClient http;
+  String url = String(INFLUXDB_URL) + "/api/v2/write?bucket=" + INFLUXDB_BUCKET + "&org=" + INFLUXDB_ORG;
+  String line = String("environment") +
+                " pm1_0=" + f2s(mv.pm1_0, 1) +
+                ",pm2_5=" + f2s(mv.pm2_5, 1) +
+                ",pm4_0=" + f2s(mv.pm4_0, 1) +
+                ",pm10=" + f2s(mv.pm10_0, 1) +
+                ",humidity=" + f2s(mv.humidity_rh, 2) +
+                ",temperature=" + f2s(mv.temperature_c, 2) +
+                ",voc=" + f2s(mv.voc_index, 1) +
+                ",nox=" + f2s(mv.nox_index, 1) +
+                ",co2=" + f2s(mv.co2_ppm, 0) +
+                ",status=" + String((unsigned long)statusFlags);
+  http.begin(url);
+  http.addHeader("Authorization", String("Token ") + INFLUXDB_TOKEN);
+  http.addHeader("Content-Type", "text/plain; charset=utf-8");
+  int code = http.POST(line);
+  Serial.printf("[InfluxDB] HTTP %d\n", code);
+  http.end();
 }
 
 void loop()
@@ -145,4 +171,6 @@ void loop()
     bool okB = ts.update(TS_CHANNEL_B_ID, TS_CHANNEL_B_APIKEY, fieldsB, "", &respB);
     Serial.println(okB ? "[TS B] OK" : "[TS B] FAIL");
   }
+
+  sendToInflux(mv, nc, statusFlags);
 }
