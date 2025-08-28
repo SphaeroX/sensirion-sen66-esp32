@@ -1,12 +1,18 @@
 import os
 from pathlib import Path
 
-Import("env")
-ROOT = Path(env["PROJECT_DIR"])
-CONFIG = ROOT / 'include' / 'config.h'
+try:  # Running under PlatformIO's SCons environment
+    Import("env")
+    ROOT = Path(env["PROJECT_DIR"])
+except NameError:  # Fallback for direct execution
+    ROOT = Path(__file__).resolve().parent.parent
 
-def get(name, default=''):
+CONFIG = ROOT / "include" / "config.h"
+
+
+def get(name, default=""):
     return os.environ.get(name, default)
+
 
 template = f"""// generated from environment variables
 #pragma once
@@ -25,3 +31,4 @@ template = f"""// generated from environment variables
 """
 
 CONFIG.write_text(template)
+print(f"Wrote {CONFIG}")
