@@ -1,11 +1,10 @@
 # sensirion-sen66-esp32
 
-This project targets the **Seeed Studio XIAO ESP32‑S3** using PlatformIO. It reads a **Sensirion SEN66** and uploads all available signals to **ThingSpeak** using self written libraries only.
+This project targets the **Seeed Studio XIAO ESP32‑S3** using PlatformIO. It reads a **Sensirion SEN66** and streams measurements to **InfluxDB**.
 
-Additionally the firmware can stream measurements to **InfluxDB** and a companion Express.js dashboard located in `/dashboard` visualizes the data on mobile devices.
+A companion Express.js dashboard located in `/dashboard` visualizes the data on mobile devices.
 
 ---
-
 ## Getting Started
 
 ### 1. Clone the project
@@ -51,36 +50,7 @@ build_flags =
 platformio run --target upload
 ```
 
-After upload open the serial monitor. You should see fresh readings and ThingSpeak update confirmations.
-
----
-
-## ThingSpeak mapping
-
-The sketch uses two channels. Adjust if you prefer a single channel.
-
-**Channel A**
-
-* field1 → PM1.0 mass \[µg/m³]
-* field2 → PM2.5 mass \[µg/m³]
-* field3 → PM4.0 mass \[µg/m³]
-* field4 → PM10 mass \[µg/m³]
-* field5 → Relative Humidity RH \[%]
-* field6 → Temperature \[°C]
-* field7 → VOC Index
-* field8 → NOx Index
-
-**Channel B**
-
-* field1 → CO₂ \[ppm]
-* field2 → NC0.5 number concentration \[#/cm³]
-* field3 → NC1.0 number concentration \[#/cm³]
-* field4 → NC2.5 number concentration \[#/cm³]
-* field5 → NC4.0 number concentration \[#/cm³]
-* field6 → NC10 number concentration \[#/cm³]
-* field7 → Status flags as unsigned integer
-
-ThingSpeak free tier accepts one update at least every 15 seconds. Keep the interval equal or longer to avoid throttling.
+After upload open the serial monitor. You should see fresh readings and InfluxDB write confirmations.
 
 ---
 
@@ -143,7 +113,7 @@ A 32‑bit integer that encodes device status and data validity bits. Zero usual
 
 ### Data validity in the library
 
-The driver checks CRC bytes and treats special raw codes as invalid. For example a raw value that equals the data type maximum is considered not available. Invalid readings become `NaN` in the printed output and are not sent to ThingSpeak fields.
+The driver checks CRC bytes and treats special raw codes as invalid. For example a raw value that equals the data type maximum is considered not available. Invalid readings become `NaN` in the printed output and are not sent to InfluxDB.
 
 ---
 
@@ -160,16 +130,11 @@ Wire SEN66 I²C and power according to the datasheet. Keep leads short for clean
 
 ---
 
-## ThingSpeak Data Visualization
-
-![ThingSpeak Data](images/thingshow.jpg)
-
----
 
 ## Project structure
 
 * `src/` main application
-* `lib/` self written libraries `Sen66` and `ThingSpeakClient`
+* `lib/` self written library `Sen66`
 * `include/` configuration headers
 * `dashboard/` Express.js server and web dashboard using InfluxDB
 * `platformio.ini` PlatformIO configuration

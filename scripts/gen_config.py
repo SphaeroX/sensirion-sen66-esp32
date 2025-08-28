@@ -15,13 +15,6 @@ template = f"""// generated from environment variables
 #define WIFI_SSID \"{get('WIFI_SSID')}\"
 #define WIFI_PASSWORD \"{get('WIFI_PASSWORD')}\"
 
-// ===== ThingSpeak setup =====
-#define TS_CHANNEL_A_ID {get('TS_CHANNEL_A_ID', '0')}UL
-#define TS_CHANNEL_A_APIKEY \"{get('TS_CHANNEL_A_APIKEY')}\"
-
-#define TS_CHANNEL_B_ID {get('TS_CHANNEL_B_ID', '0')}UL
-#define TS_CHANNEL_B_APIKEY \"{get('TS_CHANNEL_B_APIKEY')}\"
-
 #define MEASUREMENT_INTERVAL_MS {get('MEASUREMENT_INTERVAL_MS', '20000')}UL
 
 // ===== InfluxDB v2 setup =====
