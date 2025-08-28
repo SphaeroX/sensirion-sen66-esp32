@@ -54,6 +54,28 @@ After upload open the serial monitor. You should see fresh readings and InfluxDB
 
 ---
 
+## InfluxDB & Dashboard Server
+
+This project streams sensor data to InfluxDB (v2). A Node/Express server under `dashboard/` queries InfluxDB on the server side and serves a mobile‑friendly web UI.
+
+- Data sink: InfluxDB v2 using `INFLUXDB_URL`, `INFLUXDB_ORG`, `INFLUXDB_BUCKET`, `INFLUXDB_TOKEN` from `.env`.
+- Server: Express.js + ApexCharts frontend in `dashboard/`.
+- Default view shows last 24h; you can change time range and resolution.
+
+Quick start for the dashboard server:
+
+```bash
+cd dashboard
+npm install
+npm start
+```
+
+The server listens on port 3000 by default and expects the same `.env` file at the repo root.
+
+See the detailed server documentation here: dashboard/README.md
+
+---
+
 ## What each value means
 
 ### PM mass concentrations

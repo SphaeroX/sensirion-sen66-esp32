@@ -7,6 +7,35 @@ header {
   text-align: center;
   margin-bottom: 1rem;
 }
+#controls {
+  background: #f7f9fc;
+  border: 1px solid #e6ecf5;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+}
+.control-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+ul { padding-left: 1.1rem; }
+label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.hidden { display: none; }
+#refresh {
+  padding: 0.4rem 0.8rem;
+  border: 1px solid #cbd5e1;
+  background: white;
+  border-radius: 6px;
+  cursor: pointer;
+}
+#refresh:hover { background: #f1f5f9; }
 #chart-section {
   position: relative;
   height: 60vh;
