@@ -5,6 +5,7 @@
 #include "config.h"
 #include "Sen66.h"
 #include <HTTPClient.h>
+#include <math.h>
 
 Sen66 sen66(Wire);
 
@@ -58,12 +59,23 @@ static String f2s(float v, uint8_t digits = 2)
   return String(v, static_cast<unsigned int>(digits));
 }
 
+static float dewPoint(float tempC, float humidityRH)
+{
+  if (isnan(tempC) || isnan(humidityRH))
+    return NAN;
+  const float a = 17.62f;
+  const float b = 243.12f;
+  float gamma = (a * tempC) / (b + tempC) + log(humidityRH / 100.0f);
+  return (b * gamma) / (a - gamma);
+}
+
 static void sendToInflux(const Sen66::MeasuredValues &mv, const Sen66::NumberConcentration &nc, uint32_t statusFlags)
 {
   if (WiFi.status() != WL_CONNECTED)
     return;
   HTTPClient http;
   String url = String(INFLUXDB_URL) + "/api/v2/write?bucket=" + INFLUXDB_BUCKET + "&org=" + INFLUXDB_ORG;
+  const float dp = dewPoint(mv.temperature_c, mv.humidity_rh);
   String line = String("environment") +
                 " pm1_0=" + f2s(mv.pm1_0, 1) +
                 ",pm2_5=" + f2s(mv.pm2_5, 1) +
@@ -71,6 +83,7 @@ static void sendToInflux(const Sen66::MeasuredValues &mv, const Sen66::NumberCon
                 ",pm10=" + f2s(mv.pm10_0, 1) +
                 ",humidity=" + f2s(mv.humidity_rh, 2) +
                 ",temperature=" + f2s(mv.temperature_c, 2) +
+                ",dew_point=" + f2s(dp, 2) +
                 ",voc=" + f2s(mv.voc_index, 1) +
                 ",nox=" + f2s(mv.nox_index, 1) +
                 ",co2=" + f2s(mv.co2_ppm, 0) +
@@ -124,9 +137,10 @@ void loop()
     Serial.println("readDeviceStatus() failed");
   }
 
-  Serial.printf("PM1.0=%.1f PM2.5=%.1f PM4.0=%.1f PM10=%.1f ug/m3 | RH=%.2f%% T=%.2fC | VOC=%.1f NOx=%.1f | CO2=%.0f ppm\n",
+  const float dp = dewPoint(mv.temperature_c, mv.humidity_rh);
+  Serial.printf("PM1.0=%.1f PM2.5=%.1f PM4.0=%.1f PM10=%.1f ug/m3 | RH=%.2f%% T=%.2fC DP=%.2fC | VOC=%.1f NOx=%.1f | CO2=%.0f ppm\n",
                 mv.pm1_0, mv.pm2_5, mv.pm4_0, mv.pm10_0,
-                mv.humidity_rh, mv.temperature_c, mv.voc_index, mv.nox_index, mv.co2_ppm);
+                mv.humidity_rh, mv.temperature_c, dp, mv.voc_index, mv.nox_index, mv.co2_ppm);
   Serial.printf("NC0.5=%.1f NC1.0=%.1f NC2.5=%.1f NC4.0=%.1f NC10=%.1f #/cm3 | Status=0x%08lX\n",
                 nc.nc0_5, nc.nc1_0, nc.nc2_5, nc.nc4_0, nc.nc10_0, statusFlags);
 

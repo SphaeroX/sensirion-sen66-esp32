@@ -97,7 +97,7 @@ app.get('/api/history', async (req, res) => {
   try {
     const range = (req.query.range && String(req.query.range)) || '-24h';
     // Comma-separated list of fields; default to a useful set
-    const defaultFields = ['co2','temperature','humidity','pm1_0','pm2_5','pm4_0','pm10','voc','nox','nc0_5','nc1_0','nc2_5','nc4_0','nc10'];
+    const defaultFields = ['co2','temperature','humidity','dew_point','pm1_0','pm2_5','pm4_0','pm10','voc','nox','nc0_5','nc1_0','nc2_5','nc4_0','nc10'];
     const fields = (req.query.fields ? String(req.query.fields).split(',') : defaultFields).map(f => f.trim()).filter(Boolean);
     // Optional downsampling window, e.g. 1m, 5m, 10m. Empty means no aggregation
     const every = req.query.every ? String(req.query.every) : '';
