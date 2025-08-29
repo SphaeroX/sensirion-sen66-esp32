@@ -2,6 +2,41 @@ function getSelectedFields() {
   return Array.from(document.querySelectorAll('input.field:checked')).map(i => i.value);
 }
 
+const SETTINGS_KEY = 'aq_dashboard_settings';
+
+function saveSettings() {
+  const settings = {
+    preset: document.getElementById('preset').value,
+    rangeInput: document.getElementById('range-input').value,
+    every: document.getElementById('every').value,
+    fields: getSelectedFields()
+  };
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+}
+
+function loadSettings() {
+  try {
+    const s = JSON.parse(localStorage.getItem(SETTINGS_KEY));
+    if (!s) return;
+    if (s.preset) document.getElementById('preset').value = s.preset;
+    if (s.rangeInput) document.getElementById('range-input').value = s.rangeInput;
+    if (s.every) document.getElementById('every').value = s.every;
+    if (Array.isArray(s.fields)) {
+      document.querySelectorAll('input.field').forEach(cb => {
+        cb.checked = s.fields.includes(cb.value);
+      });
+    }
+  } catch (e) {
+    console.error(e);
+  }
+  updateCustomVisibility();
+}
+
+function updateCustomVisibility() {
+  const isCustom = document.getElementById('preset').value === 'custom';
+  document.getElementById('custom-range').classList.toggle('hidden', !isCustom);
+}
+
 function buildSeries(rows, selected) {
   const byField = new Map();
   for (const f of selected) byField.set(f, []);
@@ -84,14 +119,18 @@ const chart = new ApexCharts(document.querySelector('#chart'), {
 chart.render();
 
 // Controls
-document.getElementById('preset').addEventListener('change', (e) => {
-  const isCustom = e.target.value === 'custom';
-  document.getElementById('custom-range').classList.toggle('hidden', !isCustom);
+document.getElementById('preset').addEventListener('change', () => {
+  updateCustomVisibility();
+  saveSettings();
 });
+document.getElementById('every').addEventListener('change', saveSettings);
+document.getElementById('range-input').addEventListener('input', saveSettings);
 document.getElementById('refresh').addEventListener('click', () => {
+  saveSettings();
   fetchAndRender().catch(console.error);
 });
 document.querySelectorAll('input.field').forEach(cb => cb.addEventListener('change', () => {
+  saveSettings();
   fetchAndRender().catch(console.error);
 }));
 
@@ -105,5 +144,6 @@ async function tick() {
 }
 
 // Initial load (defaults to -24h)
+loadSettings();
 tick();
 setInterval(tick, 60000);
