@@ -13,6 +13,7 @@ function buildSeries(rows, selected) {
     co2: '#e74c3c',
     temperature: '#f39c12',
     humidity: '#3498db',
+    dew_point: '#5dade2',
     pm1_0: '#1abc9c',
     pm2_5: '#9b59b6',
     pm4_0: '#2c3e50',
@@ -36,6 +37,7 @@ async function fetchCurrent() {
   document.getElementById('co2').textContent = current.co2 ?? '-';
   document.getElementById('temp').textContent = current.temperature ?? '-';
   document.getElementById('hum').textContent = current.humidity ?? '-';
+  document.getElementById('dew').textContent = current.dew_point ?? '-';
   const iaqVal = iaq && typeof iaq.iaq === 'number' ? iaq.iaq : null;
   document.getElementById('iaq').textContent = iaqVal != null ? Math.round(iaqVal) : '-';
 }
