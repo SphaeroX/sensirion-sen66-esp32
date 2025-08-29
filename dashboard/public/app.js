@@ -13,10 +13,17 @@ function buildSeries(rows, selected) {
     co2: '#e74c3c',
     temperature: '#f39c12',
     humidity: '#3498db',
+    pm1_0: '#1abc9c',
     pm2_5: '#9b59b6',
+    pm4_0: '#2c3e50',
     pm10: '#8e44ad',
     voc: '#2ecc71',
-    nox: '#16a085'
+    nox: '#16a085',
+    nc0_5: '#d35400',
+    nc1_0: '#c0392b',
+    nc2_5: '#7f8c8d',
+    nc4_0: '#95a5a6',
+    nc10: '#34495e'
   };
   return selected.map(f => ({ name: f, data: byField.get(f) || [], color: palette[f] }));
 }
