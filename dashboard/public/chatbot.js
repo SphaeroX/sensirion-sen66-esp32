@@ -7,6 +7,7 @@ const chatLog = document.getElementById('chat-log');
 const chatInput = document.getElementById('chat-input');
 const chatSend = document.getElementById('chat-send');
 const chatMic = document.getElementById('chat-mic');
+const chatAudio = document.getElementById('chat-audio');
 
 // load stored API key
 apiKeyInput.value = localStorage.getItem(API_KEY_STORAGE) || '';
@@ -54,7 +55,9 @@ async function callOpenAI() {
   const sensorData = getDisplayedSensorData();
   const msgs = [...messages, { role: 'system', content: 'Aktuelle Sensordaten: ' + JSON.stringify(sensorData) }];
   const body = {
-    model: 'gpt-4o-mini',
+    model: 'gpt-4.1-mini',
+    modalities: ['text', 'audio'],
+    audio: { voice: 'alloy', format: 'wav' },
     messages: msgs,
     functions: [
       {
@@ -83,7 +86,8 @@ async function callOpenAI() {
     body: JSON.stringify(body)
   });
   const data = await res.json();
-  const msg = data.choices && data.choices[0] && data.choices[0].message;
+  const choice = data.choices && data.choices[0];
+  const msg = choice && choice.message;
   if (!msg) {
     appendMessage('assistant', 'Keine Antwort erhalten.');
     return;
@@ -107,8 +111,22 @@ async function callOpenAI() {
     messages.push({ role: 'function', name: fn.name, content: JSON.stringify(result) });
     return await callOpenAI();
   } else {
-    appendMessage('assistant', msg.content);
-    messages.push({ role: 'assistant', content: msg.content });
+    let text = '';
+    let audioData = null;
+    if (Array.isArray(msg.content)) {
+      for (const part of msg.content) {
+        if (part.type === 'output_text') text += part.text;
+        if (part.type === 'output_audio') audioData = part.audio && part.audio.data;
+      }
+    } else {
+      text = msg.content;
+    }
+    appendMessage('assistant', text);
+    messages.push({ role: 'assistant', content: text });
+    if (audioData && chatAudio) {
+      chatAudio.src = `data:audio/wav;base64,${audioData}`;
+      try { await chatAudio.play(); } catch (_) { /* ignore */ }
+    }
   }
 }
 

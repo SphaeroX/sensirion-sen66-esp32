@@ -108,3 +108,7 @@ label {
   flex: 1;
 }
 
+#chat-audio {
+  width: 100%;
+}
+
