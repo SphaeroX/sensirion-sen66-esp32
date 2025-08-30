@@ -24,7 +24,7 @@ The server listens on port 3000 by default.
 - Toggle multiple series: CO2, temperature, humidity, PM2.5, PM10, VOC, NOx.
 - Smooth, interactive charts powered by ApexCharts.
  - IAQ composite index (0–100) derived from PM2.5/PM10/CO2/VOC/NOx using conservative max-of-subscores.
-- Optional Chatbot powered by OpenAI: enter your API key in the dashboard to ask questions about current sensor values, use speech input and web search.
+- Optional Chatbot powered by OpenAI: enter your API key in the dashboard to ask questions about current sensor values (automatically sent with each chat request), use speech input and web search.
 
 ### API
 

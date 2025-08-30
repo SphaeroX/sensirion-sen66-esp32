@@ -24,6 +24,23 @@ function appendMessage(role, text) {
   chatLog.scrollTop = chatLog.scrollHeight;
 }
 
+function getDisplayedSensorData() {
+  const parse = (id) => {
+    const el = document.getElementById(id);
+    if (!el) return null;
+    const val = el.textContent.trim();
+    const num = Number(val);
+    return Number.isNaN(num) ? null : num;
+  };
+  return {
+    iaq: parse('iaq'),
+    co2: parse('co2'),
+    temperature: parse('temp'),
+    humidity: parse('hum'),
+    dew_point: parse('dew')
+  };
+}
+
 const messages = [
   { role: 'system', content: SYSTEM_PROMPT }
 ];
@@ -34,9 +51,11 @@ async function callOpenAI() {
     appendMessage('assistant', 'Bitte zuerst einen OpenAI API-Key speichern.');
     return;
   }
+  const sensorData = getDisplayedSensorData();
+  const msgs = [...messages, { role: 'system', content: 'Aktuelle Sensordaten: ' + JSON.stringify(sensorData) }];
   const body = {
     model: 'gpt-4o-mini',
-    messages,
+    messages: msgs,
     functions: [
       {
         name: 'get_sensor_data',
