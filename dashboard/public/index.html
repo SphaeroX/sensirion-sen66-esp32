@@ -68,7 +68,22 @@
     <section id="chart-section">
       <div id="chart"></div>
     </section>
+    <section id="chatbot">
+      <h2>Chatbot</h2>
+      <div class="api-row">
+        <input type="password" id="api-key" placeholder="OpenAI API Key" />
+        <button id="save-key">Speichern</button>
+      </div>
+      <div id="chat-log"></div>
+      <div class="chat-input-row">
+        <input type="text" id="chat-input" placeholder="Frage stellen..." />
+        <button id="chat-mic" title="Spracheingabe">🎤</button>
+        <button id="chat-send">Senden</button>
+      </div>
+      <audio id="chat-audio" controls></audio>
+    </section>
   </main>
   <script src="app.js"></script>
+  <script src="chatbot.js"></script>
 </body>
 </html>
