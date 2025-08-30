@@ -55,7 +55,7 @@ async function callOpenAI() {
   const sensorData = getDisplayedSensorData();
   const msgs = [...messages, { role: 'system', content: 'Aktuelle Sensordaten: ' + JSON.stringify(sensorData) }];
   const body = {
-    model: 'gpt-4.1-mini',
+    model: 'gpt-5',
     modalities: ['text', 'audio'],
     audio: { voice: 'alloy', format: 'wav' },
     messages: msgs,
