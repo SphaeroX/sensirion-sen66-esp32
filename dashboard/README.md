@@ -23,7 +23,8 @@ The server listens on port 3000 by default.
 - Optional downsampling with 1m/5m/15m/1h aggregate windows.
 - Toggle multiple series: CO2, temperature, humidity, PM2.5, PM10, VOC, NOx.
 - Smooth, interactive charts powered by ApexCharts.
- - IAQ composite index (0–100) derived from PM2.5/PM10/CO2/VOC/NOx using conservative max-of-subscores.
+- IAQ composite index (0–100) derived from PM2.5/PM10/CO2/VOC/NOx using conservative max-of-subscores.
+- PMX particulate index (0–500) combining PM1/PM2.5/PM4/PM10 with AQI-style weighting.
 
 ### API
 
@@ -32,8 +33,9 @@ The server listens on port 3000 by default.
   - `range`: Flux range start (default `-24h`).
   - `fields`: comma separated field list (default `co2,temperature,humidity,pm2_5,pm10,voc,nox`).
   - `every`: optional aggregate window (e.g. `1m`, `5m`).
- - `GET /api/iaq/current` → Latest IAQ score and component scores.
- - `GET /api/iaq/history?range=-24h&every=1m` → Time series of IAQ values.
+- `GET /api/iaq/current` → Latest IAQ score and component scores.
+- `GET /api/iaq/history?range=-24h&every=1m` → Time series of IAQ values.
+- `GET /api/pmx/current` → PMX index with sub-indices and NowCast concentrations.
 
 ### IAQ Scoring
 

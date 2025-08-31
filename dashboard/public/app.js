@@ -65,9 +65,10 @@ function buildSeries(rows, selected) {
 }
 
 async function fetchCurrent() {
-  const [current, iaq] = await Promise.all([
+  const [current, iaq, pmx] = await Promise.all([
     fetch('/api/current').then(r => r.json()),
-    fetch('/api/iaq/current').then(r => r.json())
+    fetch('/api/iaq/current').then(r => r.json()),
+    fetch('/api/pmx/current').then(r => r.json())
   ]);
   document.getElementById('co2').textContent = current.co2 ?? '-';
   document.getElementById('temp').textContent = current.temperature ?? '-';
@@ -75,6 +76,9 @@ async function fetchCurrent() {
   document.getElementById('dew').textContent = current.dew_point ?? '-';
   const iaqVal = iaq && typeof iaq.iaq === 'number' ? iaq.iaq : null;
   document.getElementById('iaq').textContent = iaqVal != null ? Math.round(iaqVal) : '-';
+  const pmxVal = pmx && typeof pmx.pmx === 'number' ? pmx.pmx : null;
+  document.getElementById('pmx').textContent = pmxVal != null ? pmxVal : '-';
+  document.getElementById('pmx-cat').textContent = pmx && pmx.category ? pmx.category : '-';
 }
 
 async function fetchAndRender() {

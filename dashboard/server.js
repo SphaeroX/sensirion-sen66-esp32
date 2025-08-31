@@ -81,6 +81,118 @@ function computeIAQ(fields) {
   return clamp(Math.max(...scores), 0, 100);
 }
 
+// ===== PMX indicator (0..500) =====
+const pm25Breakpoints = [
+  { cLow: 0.0,   cHigh: 9.0,   iLow:   0, iHigh:  50 },
+  { cLow: 9.1,   cHigh: 35.0,  iLow:  51, iHigh: 100 },
+  { cLow: 35.1,  cHigh: 55.0,  iLow: 101, iHigh: 150 },
+  { cLow: 55.1,  cHigh: 125.0, iLow: 151, iHigh: 200 },
+  { cLow: 125.1, cHigh: 225.0, iLow: 201, iHigh: 300 },
+  { cLow: 225.1, cHigh: 325.0, iLow: 301, iHigh: 400 },
+  { cLow: 325.1, cHigh: 500.0, iLow: 401, iHigh: 500 }
+];
+
+const pm10Breakpoints = [
+  { cLow: 0,   cHigh: 54,  iLow:   0, iHigh:  50 },
+  { cLow: 55,  cHigh: 154, iLow:  51, iHigh: 100 },
+  { cLow: 155, cHigh: 254, iLow: 101, iHigh: 150 },
+  { cLow: 255, cHigh: 354, iLow: 151, iHigh: 200 },
+  { cLow: 355, cHigh: 424, iLow: 201, iHigh: 300 },
+  { cLow: 425, cHigh: 504, iLow: 301, iHigh: 400 },
+  { cLow: 505, cHigh: 604, iLow: 401, iHigh: 500 }
+];
+
+function interpolateBreakpoints(bp25, bp10, diameter) {
+  const ratio = (diameter - 2.5) / (10 - 2.5);
+  return bp25.map((a, i) => {
+    const b = bp10[i] || bp10[bp10.length - 1];
+    return {
+      cLow: a.cLow + ratio * (b.cLow - a.cLow),
+      cHigh: a.cHigh + ratio * (b.cHigh - a.cHigh),
+      iLow: a.iLow,
+      iHigh: a.iHigh
+    };
+  });
+}
+
+const pm4Breakpoints = interpolateBreakpoints(pm25Breakpoints, pm10Breakpoints, 4);
+
+function nowCast(values) {
+  const clean = values.filter(v => isFinite(v) && v >= 0);
+  if (!clean.length) return null;
+  const max = Math.max(...clean);
+  const min = Math.min(...clean);
+  const w = Math.min(1, Math.max(0.5, max === 0 ? 1 : min / max));
+  let sum = 0;
+  let wsum = 0;
+  for (let i = 0; i < clean.length && i < 12; i++) {
+    const weight = Math.pow(w, i);
+    sum += clean[i] * weight;
+    wsum += weight;
+  }
+  return sum / wsum;
+}
+
+function aqiFromBreakpoints(conc, table) {
+  if (conc == null || !isFinite(conc)) return null;
+  const c = Math.max(0, conc);
+  for (const bp of table) {
+    if (c <= bp.cHigh) {
+      return bp.iLow + (bp.iHigh - bp.iLow) * ((c - bp.cLow) / (bp.cHigh - bp.cLow));
+    }
+  }
+  return 500;
+}
+
+function categoryFromAQI(i) {
+  if (i <= 50) return 'good';
+  if (i <= 100) return 'moderate';
+  if (i <= 150) return 'unhealthy for sensitive groups';
+  if (i <= 200) return 'unhealthy';
+  if (i <= 300) return 'very unhealthy';
+  return 'hazardous';
+}
+
+function computePMX(series) {
+  const conc = {};
+  const subs = {};
+  const parts = [];
+  function add(field, table, weight) {
+    const c = nowCast(series[field] || []);
+    conc[field] = c;
+    if (c == null) return;
+    const a = aqiFromBreakpoints(c, table);
+    subs[field] = Math.round(a);
+    parts.push({ field, aqi: a, weight });
+  }
+
+  add('pm1_0', pm25Breakpoints, 0.40);
+  add('pm2_5', pm25Breakpoints, 0.35);
+  add('pm4_0', pm4Breakpoints, 0.15);
+  add('pm10', pm10Breakpoints, 0.10);
+
+  if (!parts.length) {
+    return { pmx: null, category: null, dominant: null, subs, concNowCast: conc, explain: { weights: {}, breakpoints: {} } };
+  }
+
+  const dominant = parts.reduce((a, b) => (b.aqi > a.aqi ? b : a));
+  const weightSum = parts.reduce((s, p) => s + p.weight, 0);
+  const mean = parts.reduce((s, p) => s + p.aqi * p.weight, 0) / weightSum;
+  const pmx = Math.round(0.7 * dominant.aqi + 0.3 * mean);
+
+  return {
+    pmx,
+    category: categoryFromAQI(pmx),
+    dominant: dominant.field,
+    subs,
+    concNowCast: conc,
+    explain: {
+      weights: { pm1_0: 0.40, pm2_5: 0.35, pm4_0: 0.15, pm10: 0.10 },
+      breakpoints: { pm25: pm25Breakpoints, pm10: pm10Breakpoints, pm4: pm4Breakpoints }
+    }
+  };
+}
+
 app.get('/api/current', async (req, res) => {
   try {
     const query = `from(bucket:"${bucket}") |> range(start:-5m) |> filter(fn:(r)=>r._measurement=="environment") |> last()`;
@@ -113,6 +225,25 @@ app.get('/api/history', async (req, res) => {
 
     const rows = await queryApi.collectRows(flux);
     res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message || String(err) });
+  }
+});
+
+// Current PMX calculated from last 12 hourly means
+app.get('/api/pmx/current', async (req, res) => {
+  try {
+    const flux = `from(bucket:"${bucket}") |> range(start:-12h) |> filter(fn:(r)=>r._measurement=="environment" and contains(value: r._field, set: ["pm1_0","pm2_5","pm4_0","pm10"])) |> aggregateWindow(every: 1h, fn: mean, createEmpty: false) |> pivot(rowKey:["_time"], columnKey:["_field"], valueColumn:"_value") |> sort(columns:["_time"], desc:true) |> limit(n:12)`;
+    const table = await queryApi.collectRows(flux);
+    const series = { pm1_0: [], pm2_5: [], pm4_0: [], pm10: [] };
+    for (const r of table) {
+      if (r.pm1_0 != null) series.pm1_0.push(r.pm1_0);
+      if (r.pm2_5 != null) series.pm2_5.push(r.pm2_5);
+      if (r.pm4_0 != null) series.pm4_0.push(r.pm4_0);
+      if (r.pm10 != null) series.pm10.push(r.pm10);
+    }
+    const result = computePMX(series);
+    res.json(result);
   } catch (err) {
     res.status(500).json({ error: err.message || String(err) });
   }
