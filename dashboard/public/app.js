@@ -3,6 +3,8 @@ function getSelectedFields() {
 }
 
 const SETTINGS_KEY = 'aq_dashboard_settings';
+const CURRENT_REFRESH_MS = 5000;
+const HISTORY_REFRESH_MS = 60000;
 
 function saveSettings() {
   const settings = {
@@ -122,6 +124,22 @@ const chart = new ApexCharts(document.querySelector('#chart'), {
 
 chart.render();
 
+async function refreshCurrent() {
+  try {
+    await fetchCurrent();
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+async function refreshHistory() {
+  try {
+    await fetchAndRender();
+  } catch (e) {
+    console.error(e);
+  }
+}
+
 // Controls
 document.getElementById('preset').addEventListener('change', () => {
   updateCustomVisibility();
@@ -131,23 +149,17 @@ document.getElementById('every').addEventListener('change', saveSettings);
 document.getElementById('range-input').addEventListener('input', saveSettings);
 document.getElementById('refresh').addEventListener('click', () => {
   saveSettings();
-  fetchAndRender().catch(console.error);
+  refreshCurrent();
+  refreshHistory();
 });
 document.querySelectorAll('input.field').forEach(cb => cb.addEventListener('change', () => {
   saveSettings();
-  fetchAndRender().catch(console.error);
+  refreshHistory();
 }));
-
-async function tick() {
-  try {
-    await fetchCurrent();
-    await fetchAndRender();
-  } catch (e) {
-    console.error(e);
-  }
-}
 
 // Initial load (defaults to -24h)
 loadSettings();
-tick();
-setInterval(tick, 60000);
+refreshCurrent();
+refreshHistory();
+setInterval(refreshCurrent, CURRENT_REFRESH_MS);
+setInterval(refreshHistory, HISTORY_REFRESH_MS);
