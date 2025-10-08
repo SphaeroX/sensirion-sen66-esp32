@@ -1,64 +1,94 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="de">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Air Quality Dashboard</title>
   <link rel="stylesheet" href="styles.css" />
   <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
-</head>
+  <style>
+    /* Lightweight accordion styles inline to avoid FOUC */
+    .accordion-header {
+      cursor: pointer;
+      user-select: none;
+      font-weight: 600;
+      padding: 0.25rem 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .accordion-header::after {
+      content: '▾';
+      transition: transform 0.2s ease;
+    }
+    .accordion-header[aria-expanded="false"]::after { transform: rotate(-90deg); }
+    .accordion-content { margin-top: 0.25rem; }
+  </style>
+  </head>
 <body>
   <header>
     <h1>Air Quality</h1>
   </header>
   <main>
     <section id="controls">
-      <div class="control-row">
-        <label for="preset">Zeitraum:</label>
-        <select id="preset">
-          <option value="-24h" selected>Letzte 24 Stunden</option>
-          <option value="-7d">Letzte 7 Tage</option>
-          <option value="-30d">Letzte 30 Tage</option>
-          <option value="-3h">Letzte 3 Stunden</option>
-          <option value="custom">Benutzerdefiniert…</option>
-        </select>
-        <span id="custom-range" class="hidden">
-          <input type="text" id="range-input" placeholder="z.B. -12h oder -2d" />
-        </span>
-        <label for="every">Auflösung:</label>
-        <select id="every">
-          <option value="">Rohdaten</option>
-          <option value="1m" selected>1 Minute</option>
-          <option value="5m">5 Minuten</option>
-          <option value="15m">15 Minuten</option>
-          <option value="1h">1 Stunde</option>
-        </select>
-        <button id="refresh">Aktualisieren</button>
-      </div>
-      <div class="control-row fields">
-        <span class="row-title">Datenreihen:</span>
-        <label><input type="checkbox" class="field" value="iaq" checked /> IAQ (0–100)</label>
-        <label><input type="checkbox" class="field" value="co2" checked /> CO2 (ppm)</label>
-        <label><input type="checkbox" class="field" value="temperature" checked /> Temperatur (°C)</label>
-        <label><input type="checkbox" class="field" value="humidity" checked /> Luftfeuchte (%)</label>
-        <label><input type="checkbox" class="field" value="dew_point" /> Taupunkt (°C)</label>
-        <label><input type="checkbox" class="field" value="pm1_0" /> PM1.0 (µg/m³)</label>
-        <label><input type="checkbox" class="field" value="pm2_5" /> PM2.5 (µg/m³)</label>
-        <label><input type="checkbox" class="field" value="pm4_0" /> PM4.0 (µg/m³)</label>
-        <label><input type="checkbox" class="field" value="pm10" /> PM10 (µg/m³)</label>
-        <label><input type="checkbox" class="field" value="nc0_5" /> NC0.5 (#/cm³)</label>
-        <label><input type="checkbox" class="field" value="nc1_0" /> NC1.0 (#/cm³)</label>
-        <label><input type="checkbox" class="field" value="nc2_5" /> NC2.5 (#/cm³)</label>
-        <label><input type="checkbox" class="field" value="nc4_0" /> NC4.0 (#/cm³)</label>
-        <label><input type="checkbox" class="field" value="nc10" /> NC10 (#/cm³)</label>
-        <label><input type="checkbox" class="field" value="voc" /> VOC (Index)</label>
-        <label><input type="checkbox" class="field" value="nox" /> NOx (Index)</label>
+      <div class="accordion-header" id="controls-toggle" aria-expanded="false">Einstellungen anzeigen</div>
+      <div class="accordion-content hidden" id="controls-content">
+        <div class="control-row">
+          <label for="preset">Zeitraum:</label>
+          <select id="preset">
+            <option value="-24h" selected>Letzte 24 Stunden</option>
+            <option value="-7d">Letzte 7 Tage</option>
+            <option value="-30d">Letzte 30 Tage</option>
+            <option value="-3h">Letzte 3 Stunden</option>
+            <option value="custom">Benutzerdefiniert</option>
+          </select>
+          <span id="custom-range" class="hidden">
+            <input type="text" id="range-input" placeholder="z.B. -12h oder -2d" />
+          </span>
+          <label for="every">Auflösung:</label>
+          <select id="every">
+            <option value="">Rohdaten</option>
+            <option value="1m" selected>1 Minute</option>
+            <option value="5m">5 Minuten</option>
+            <option value="15m">15 Minuten</option>
+            <option value="1h">1 Stunde</option>
+          </select>
+          <button id="refresh">Aktualisieren</button>
+        </div>
+        <div class="control-row fields">
+          <span class="row-title">Indizes:</span>
+          <label><input type="checkbox" class="field" value="iaq" checked /> IAQ (0–100)</label>
+          <label><input type="checkbox" class="field" value="voc_index" checked /> VOC Index (0–100)</label>
+          <label><input type="checkbox" class="field" value="co2_index" checked /> CO2 Index (0–100)</label>
+          <label><input type="checkbox" class="field" value="pm_index" checked /> PM Index (0–100)</label>
+        </div>
+        <div class="control-row fields">
+          <span class="row-title">Datenreihen:</span>
+          <label><input type="checkbox" class="field" value="co2" checked /> CO2 (ppm)</label>
+          <label><input type="checkbox" class="field" value="temperature" checked /> Temperatur (°C)</label>
+          <label><input type="checkbox" class="field" value="humidity" checked /> Luftfeuchte (%)</label>
+          <label><input type="checkbox" class="field" value="dew_point" /> Taupunkt (°C)</label>
+          <label><input type="checkbox" class="field" value="pm1_0" /> PM1.0 (µg/m³)</label>
+          <label><input type="checkbox" class="field" value="pm2_5" /> PM2.5 (µg/m³)</label>
+          <label><input type="checkbox" class="field" value="pm4_0" /> PM4.0 (µg/m³)</label>
+          <label><input type="checkbox" class="field" value="pm10" /> PM10 (µg/m³)</label>
+          <label><input type="checkbox" class="field" value="nc0_5" /> NC0.5 (#/cm³)</label>
+          <label><input type="checkbox" class="field" value="nc1_0" /> NC1.0 (#/cm³)</label>
+          <label><input type="checkbox" class="field" value="nc2_5" /> NC2.5 (#/cm³)</label>
+          <label><input type="checkbox" class="field" value="nc4_0" /> NC4.0 (#/cm³)</label>
+          <label><input type="checkbox" class="field" value="nc10" /> NC10 (#/cm³)</label>
+          <label><input type="checkbox" class="field" value="voc" /> VOC (Index)</label>
+          <label><input type="checkbox" class="field" value="nox" /> NOx (Index)</label>
+        </div>
       </div>
     </section>
     <section id="current">
       <h2>Current Values</h2>
       <ul>
         <li>IAQ: <span id="iaq">-</span> (0=best, 100=worst)</li>
+        <li>VOC Index: <span id="vocIdx">-</span> (0-100)</li>
+        <li>CO2 Index: <span id="co2Idx">-</span> (0-100)</li>
+        <li>PM Index: <span id="pmIdx">-</span> (0-100)</li>
         <li>PMX: <span id="pmx">-</span> (<span id="pmx-cat">-</span>)</li>
         <li>CO2: <span id="co2">-</span> ppm</li>
         <li>Temperature: <span id="temp">-</span> °C</li>
@@ -73,3 +103,4 @@
   <script src="app.js"></script>
 </body>
 </html>
+

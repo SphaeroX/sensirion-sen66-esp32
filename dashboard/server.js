@@ -81,6 +81,25 @@ function computeIAQ(fields) {
   return clamp(Math.max(...scores), 0, 100);
 }
 
+// Convenience wrappers to compute capped indices (0..100)
+function computeCO2Index(v) {
+  const s = scoreCO2(v);
+  return s == null ? null : clamp(s, 0, 100);
+}
+
+function computeVOCIndex(v) {
+  const s = scoreVOCIndex(v);
+  return s == null ? null : clamp(s, 0, 100);
+}
+
+function computePMIndex(fields) {
+  const s25 = fields.pm2_5 != null ? scorePM25(fields.pm2_5) : null;
+  const s10 = fields.pm10 != null ? scorePM10(fields.pm10) : null;
+  const parts = [s25, s10].filter(v => v != null);
+  if (!parts.length) return null;
+  return clamp(Math.max(...parts), 0, 100);
+}
+
 // ===== PMX indicator (0..500) =====
 const pm25Breakpoints = [
   { cLow: 0.0,   cHigh: 9.0,   iLow:   0, iHigh:  50 },
@@ -230,6 +249,52 @@ app.get('/api/history', async (req, res) => {
   }
 });
 
+// Index history: returns computed rows for selected indices (voc_index, co2_index, pm_index)
+app.get('/api/index/history', async (req, res) => {
+  try {
+    const range = (req.query.range && String(req.query.range)) || '-24h';
+    const every = req.query.every ? String(req.query.every) : '';
+    const requested = (req.query.fields ? String(req.query.fields).split(',') : ['voc_index','co2_index','pm_index']).map(s => s.trim()).filter(Boolean);
+
+    const needVOC = requested.includes('voc_index');
+    const needCO2 = requested.includes('co2_index');
+    const needPM = requested.includes('pm_index');
+
+    const baseFields = [];
+    if (needVOC) baseFields.push('voc');
+    if (needCO2) baseFields.push('co2');
+    if (needPM) baseFields.push('pm2_5','pm10');
+
+    if (!baseFields.length) return res.json([]);
+
+    let flux = `from(bucket:"${bucket}") |> range(start:${range}) |> filter(fn:(r)=>r._measurement=="environment" and contains(value: r._field, set: ["${baseFields.join('\",\"')}"]))`;
+    if (every) {
+      flux += ` |> aggregateWindow(every: ${every}, fn: mean, createEmpty: false)`;
+    }
+    flux += ` |> pivot(rowKey:["_time"], columnKey:["_field"], valueColumn:"_value")`;
+
+    const table = await queryApi.collectRows(flux);
+    const rows = [];
+    for (const r of table) {
+      if (needVOC) {
+        const v = computeVOCIndex(r.voc);
+        if (v != null) rows.push({ _time: r._time, _field: 'voc_index', _value: Math.round(v) });
+      }
+      if (needCO2) {
+        const c = computeCO2Index(r.co2);
+        if (c != null) rows.push({ _time: r._time, _field: 'co2_index', _value: Math.round(c) });
+      }
+      if (needPM) {
+        const p = computePMIndex(r);
+        if (p != null) rows.push({ _time: r._time, _field: 'pm_index', _value: Math.round(p) });
+      }
+    }
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message || String(err) });
+  }
+});
+
 // Current PMX calculated from last 12 hourly means
 app.get('/api/pmx/current', async (req, res) => {
   try {
@@ -264,6 +329,22 @@ app.get('/api/iaq/current', async (req, res) => {
       voc:   fields.voc   != null ? scoreVOCIndex(fields.voc) : null,
       nox:   fields.nox   != null ? scoreNOxIndex(fields.nox) : null,
     }, raw: fields });
+  } catch (err) {
+    res.status(500).json({ error: err.message || String(err) });
+  }
+});
+
+// Current indices (0..100): voc_index, co2_index, pm_index
+app.get('/api/index/current', async (req, res) => {
+  try {
+    const query = `from(bucket:"${bucket}") |> range(start:-5m) |> filter(fn:(r)=>r._measurement=="environment") |> last()`;
+    const rows = await queryApi.collectRows(query);
+    const fields = {};
+    rows.forEach(r => { fields[r._field] = r._value; });
+    const voc_index = computeVOCIndex(fields.voc);
+    const co2_index = computeCO2Index(fields.co2);
+    const pm_index = computePMIndex(fields);
+    res.json({ voc_index: voc_index == null ? null : Math.round(voc_index), co2_index: co2_index == null ? null : Math.round(co2_index), pm_index: pm_index == null ? null : Math.round(pm_index) });
   } catch (err) {
     res.status(500).json({ error: err.message || String(err) });
   }

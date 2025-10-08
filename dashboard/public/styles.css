@@ -75,3 +75,9 @@ label {
   }
 }
 
+/* Accordion tweaks (header base styles are inlined in index.html) */
+#controls .accordion-header {
+  color: #0f172a;
+}
+
+
