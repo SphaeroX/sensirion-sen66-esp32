@@ -22,6 +22,15 @@ const SERIES_COLORS = {
   pm_index: '#8e44ad'
 };
 
+// Use browser locale/timezone for date formatting
+const BROWSER_LOCALE = (typeof navigator !== 'undefined' && navigator.language) ? navigator.language : 'de-DE';
+const DATE_TIME_FORMATTER = new Intl.DateTimeFormat(BROWSER_LOCALE, {
+  day: '2-digit',
+  month: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit'
+});
+
 const dom = (() => {
   const displays = {
     co2: document.getElementById('co2'),
@@ -263,12 +272,17 @@ const chart = new ApexCharts(document.querySelector('#chart'), {
   chart: { type: 'line', height: '100%', animations: { enabled: true } },
   series: [],
   stroke: { width: 2, curve: 'smooth' },
-  xaxis: { type: 'datetime' },
+  xaxis: { type: 'datetime', labels: { datetimeUTC: false } },
   yaxis: [
     { labels: { formatter: (value) => value.toFixed(0) } }
   ],
   legend: { position: 'top', horizontalAlign: 'left' },
-  tooltip: { shared: true, x: { format: 'dd.MM HH:mm' } }
+  tooltip: {
+    shared: true,
+    x: {
+      formatter: (val) => DATE_TIME_FORMATTER.format(new Date(val))
+    }
+  }
 });
 
 chart.render();
