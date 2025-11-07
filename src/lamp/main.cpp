@@ -40,7 +40,7 @@ constexpr uint8_t OLED_HEIGHT = 40;
 #endif
 constexpr uint8_t OLED_PAGE_COUNT = (OLED_HEIGHT + 7) / 8;
 
-constexpr uint8_t LED_BRIGHTNESS = 128;
+constexpr uint8_t LED_BRIGHTNESS = 1;
 constexpr unsigned long IAQ_REFRESH_MS = 30000UL;
 constexpr unsigned long WIFI_RETRY_DELAY_MS = 5000UL;
 
@@ -215,7 +215,7 @@ void flushOled()
   }
 }
 
-void showHelloOnOled()
+void showOledStatus(const String &line1, const String &line2 = String())
 {
   if (!oledReady)
   {
@@ -225,15 +225,58 @@ void showHelloOnOled()
   oled.setTextSize(1);
   oled.setTextColor(SSD1306_WHITE);
   oled.setCursor(0, 0);
-  oled.println("hello");
+  if (line1.length())
+  {
+    oled.println(line1);
+  }
+  if (line2.length())
+  {
+    oled.println(line2);
+  }
   flushOled();
 }
 
-void showOledStatus(const String &line1, const String &line2 = String())
+void showWorstFieldOnOled(const LatestFields &fields)
 {
-  (void)line1;
-  (void)line2;
-  showHelloOnOled();
+  if (!oledReady)
+  {
+    return;
+  }
+
+  const char *label = nullptr;
+  float score = NAN;
+  auto consider = [&](const char *name, float value)
+  {
+    if (isnan(value))
+    {
+      return;
+    }
+    if (isnan(score) || value > score)
+    {
+      label = name;
+      score = value;
+    }
+  };
+
+  consider("PM2.5", scorePM25(fields.pm25));
+  consider("PM10", scorePM10(fields.pm10));
+  consider("CO2", scoreCO2(fields.co2));
+  consider("VOC", scoreVOC(fields.voc));
+  consider("NOx", scoreNOx(fields.nox));
+
+  oled.clearDisplay();
+  oled.setTextColor(SSD1306_WHITE);
+  oled.setCursor(0, 0);
+  oled.setTextSize(2);
+  if (label)
+  {
+    oled.println(label);
+  }
+  else
+  {
+    oled.println("--");
+  }
+  flushOled();
 }
 
 uint32_t colorForSlot(uint8_t idx)
@@ -537,4 +580,5 @@ void loop()
   Serial.printf("IAQ=%.1f (pm2.5=%.1f pm10=%.1f co2=%.0f voc=%.1f nox=%.1f)\n",
                 iaq, fields.pm25, fields.pm10, fields.co2, fields.voc, fields.nox);
   displayIAQ(iaq);
+  showWorstFieldOnOled(fields);
 }
