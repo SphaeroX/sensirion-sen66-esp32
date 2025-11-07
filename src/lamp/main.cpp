@@ -40,7 +40,15 @@ constexpr uint8_t OLED_HEIGHT = 40;
 #endif
 constexpr uint8_t OLED_PAGE_COUNT = (OLED_HEIGHT + 7) / 8;
 
-constexpr uint8_t LED_BRIGHTNESS = 1;
+#ifndef LED_BRIGHTNESS_MIN
+#define LED_BRIGHTNESS_MIN 1
+#endif
+
+#ifndef LED_BRIGHTNESS_MAX
+#define LED_BRIGHTNESS_MAX 10
+#endif
+
+static_assert(LED_BRIGHTNESS_MAX >= LED_BRIGHTNESS_MIN, "LED_BRIGHTNESS_MAX must be >= LED_BRIGHTNESS_MIN");
 constexpr unsigned long IAQ_REFRESH_MS = 30000UL;
 constexpr unsigned long WIFI_RETRY_DELAY_MS = 5000UL;
 
@@ -58,6 +66,38 @@ struct LatestFields
 };
 
 unsigned long lastPoll = 0;
+
+uint8_t brightnessForActiveLeds(uint8_t activeCount)
+{
+  if (LED_BRIGHTNESS_MAX == LED_BRIGHTNESS_MIN)
+  {
+    return LED_BRIGHTNESS_MIN;
+  }
+  if (LED_RING_COUNT <= 1)
+  {
+    return activeCount == 0 ? LED_BRIGHTNESS_MIN : LED_BRIGHTNESS_MAX;
+  }
+
+  uint8_t bounded = activeCount;
+  if (bounded == 0)
+  {
+    bounded = 1;
+  }
+  if (bounded > LED_RING_COUNT)
+  {
+    bounded = LED_RING_COUNT;
+  }
+
+  const float ratio = static_cast<float>(bounded - 1) / static_cast<float>(LED_RING_COUNT - 1);
+  const float scaled = static_cast<float>(LED_BRIGHTNESS_MIN) +
+                       ratio * static_cast<float>(LED_BRIGHTNESS_MAX - LED_BRIGHTNESS_MIN);
+  return static_cast<uint8_t>(roundf(scaled));
+}
+
+void setRingBrightnessForActive(uint8_t activeCount)
+{
+  ring.setBrightness(brightnessForActiveLeds(activeCount));
+}
 
 float clampf(float v, float a, float b)
 {
@@ -174,6 +214,7 @@ void showSolid(uint32_t color)
   {
     ring.setPixelColor(i, color);
   }
+  setRingBrightnessForActive(LED_RING_COUNT);
   ring.show();
 }
 
@@ -342,6 +383,7 @@ void displayIAQ(float iaq)
   {
     ring.setPixelColor(i, colorForSlot(i));
   }
+  setRingBrightnessForActive(active);
   ring.show();
 }
 
@@ -543,7 +585,7 @@ void setup()
   }
 
   ring.begin();
-  ring.setBrightness(LED_BRIGHTNESS);
+  setRingBrightnessForActive(0);
   ring.clear();
   ring.show();
 
