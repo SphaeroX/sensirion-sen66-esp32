@@ -32,8 +32,13 @@
 
 constexpr uint8_t OLED_WIDTH = 72;
 constexpr uint8_t OLED_HEIGHT = 40;
-constexpr int16_t OLED_X_OFFSET = 13;
-constexpr int16_t OLED_Y_OFFSET = 14;
+#ifndef OLED_X_OFFSET
+#define OLED_X_OFFSET 28
+#endif
+#ifndef OLED_Y_OFFSET
+#define OLED_Y_OFFSET 7
+#endif
+constexpr uint8_t OLED_PAGE_COUNT = (OLED_HEIGHT + 7) / 8;
 
 constexpr uint8_t LED_BRIGHTNESS = 128;
 constexpr unsigned long IAQ_REFRESH_MS = 30000UL;
@@ -172,6 +177,44 @@ void showSolid(uint32_t color)
   ring.show();
 }
 
+void flushOled()
+{
+  if (!oledReady)
+  {
+    return;
+  }
+
+  const uint8_t columnStart = OLED_X_OFFSET;
+  const uint8_t columnEnd = columnStart + OLED_WIDTH - 1;
+  const uint8_t pageEnd = OLED_PAGE_COUNT - 1;
+
+  oled.ssd1306_command(SSD1306_PAGEADDR);
+  oled.ssd1306_command(0);
+  oled.ssd1306_command(pageEnd);
+  oled.ssd1306_command(SSD1306_COLUMNADDR);
+  oled.ssd1306_command(columnStart);
+  oled.ssd1306_command(columnEnd);
+
+  uint8_t *buffer = oled.getBuffer();
+  const uint16_t totalBytes = static_cast<uint16_t>(OLED_WIDTH) * OLED_PAGE_COUNT;
+  uint16_t index = 0;
+
+  while (index < totalBytes)
+  {
+    Wire.beginTransmission(OLED_I2C_ADDR);
+    Wire.write(static_cast<uint8_t>(0x40));
+    uint8_t chunk = 16;
+    const uint16_t remaining = totalBytes - index;
+    if (remaining < chunk)
+    {
+      chunk = static_cast<uint8_t>(remaining);
+    }
+    Wire.write(buffer + index, chunk);
+    Wire.endTransmission();
+    index += chunk;
+  }
+}
+
 void showHelloOnOled()
 {
   if (!oledReady)
@@ -179,11 +222,11 @@ void showHelloOnOled()
     return;
   }
   oled.clearDisplay();
-  oled.setTextSize(2);
+  oled.setTextSize(1);
   oled.setTextColor(SSD1306_WHITE);
-  oled.setCursor(OLED_X_OFFSET, OLED_Y_OFFSET);
+  oled.setCursor(0, 0);
   oled.println("hello");
-  oled.display();
+  flushOled();
 }
 
 void showOledStatus(const String &line1, const String &line2 = String())
@@ -214,7 +257,7 @@ void drawIaqOnOled(float iaq, const LatestFields &fields)
   }
   oled.clearDisplay();
   oled.setTextColor(SSD1306_WHITE);
-  oled.setCursor(OLED_X_OFFSET, OLED_Y_OFFSET);
+  oled.setCursor(0, 0);
   oled.setTextSize(1);
   oled.println("IAQ");
   oled.setTextSize(2);
@@ -239,7 +282,7 @@ void drawIaqOnOled(float iaq, const LatestFields &fields)
     oled.print("VOC:");
     oled.println(static_cast<int>(roundf(fields.voc)));
   }
-  oled.display();
+  flushOled();
 }
 
 void displayIAQ(float iaq)
@@ -445,6 +488,8 @@ void setup()
   if (oled.begin(SSD1306_SWITCHCAPVCC, OLED_I2C_ADDR))
   {
     oledReady = true;
+    oled.ssd1306_command(SSD1306_SETDISPLAYOFFSET);
+    oled.ssd1306_command(OLED_Y_OFFSET);
     oled.clearDisplay();
     oled.setTextColor(SSD1306_WHITE);
     showOledStatus("IAQ Lamp", "Booting...");
