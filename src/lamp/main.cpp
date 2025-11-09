@@ -45,7 +45,7 @@ constexpr uint8_t OLED_PAGE_COUNT = (OLED_HEIGHT + 7) / 8;
 #endif
 
 #ifndef LED_BRIGHTNESS_MAX
-#define LED_BRIGHTNESS_MAX 10
+#define LED_BRIGHTNESS_MAX 3
 #endif
 
 static_assert(LED_BRIGHTNESS_MAX >= LED_BRIGHTNESS_MIN, "LED_BRIGHTNESS_MAX must be >= LED_BRIGHTNESS_MIN");
