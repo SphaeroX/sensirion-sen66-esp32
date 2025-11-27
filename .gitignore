@@ -7,3 +7,5 @@ config.h
 dashboard/node_modules
 .env
 .vscode/settings.json
+.GEMINI.md
+.android_widget/*
