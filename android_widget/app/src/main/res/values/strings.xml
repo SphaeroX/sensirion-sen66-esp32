@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Sen66 Widget</string>
+    <string name="widget_loading">Loading...</string>
+    <string name="iaq_label">IAQ</string>
+</resources>

@@ -8,4 +8,12 @@ dashboard/node_modules
 .env
 .vscode/settings.json
 *GEMINI.md
-*android_widget*
+
+# Android Widget
+android_widget/.gradle/
+android_widget/local.properties
+android_widget/.idea/
+android_widget/build/
+android_widget/*/build/
+android_widget/.cxx/
+
