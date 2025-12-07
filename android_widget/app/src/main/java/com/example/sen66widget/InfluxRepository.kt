@@ -14,6 +14,10 @@ import com.example.sen66widget.MainActivity.Companion.PREF_INFLUX_ORG
 import com.example.sen66widget.MainActivity.Companion.PREF_INFLUX_BUCKET
 import com.example.sen66widget.MainActivity.Companion.PREF_INFLUX_TOKEN
 import com.example.sen66widget.MainActivity.Companion.PREF_MAX_DATA_AGE
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.TimeZone
+import kotlin.math.max
 
 object InfluxRepository {
 
@@ -98,5 +102,115 @@ object InfluxRepository {
             }
         }
         return fields
+    }
+    data class HistoryItem(
+        val time: Long,
+        val fields: IaqCalculator.LatestFields
+    )
+
+    fun fetchHistoryData(context: Context, hours: Int): List<HistoryItem> {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val influxUrl = prefs.getString(PREF_INFLUX_URL, "") ?: ""
+        val influxOrg = prefs.getString(PREF_INFLUX_ORG, "") ?: ""
+        val influxBucket = prefs.getString(PREF_INFLUX_BUCKET, "") ?: ""
+        val influxToken = prefs.getString(PREF_INFLUX_TOKEN, "") ?: ""
+
+        if (influxUrl.isEmpty() || influxOrg.isEmpty() || influxBucket.isEmpty() || influxToken.isEmpty()) {
+            return emptyList()
+        }
+
+        // Calculate window to get approx 50 points
+        val windowMinutes = max(1, (hours * 60) / 50)
+
+        val fluxQuery = """
+            from(bucket: "$influxBucket")
+              |> range(start: -${hours}h)
+              |> filter(fn: (r) => r["_measurement"] == "environment")
+              |> filter(fn: (r) => r["_field"] == "pm2_5" or r["_field"] == "pm10" or r["_field"] == "co2" or r["_field"] == "voc" or r["_field"] == "nox")
+              |> aggregateWindow(every: ${windowMinutes}m, fn: mean, createEmpty: false)
+              |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
+              |> keep(columns: ["_time", "pm2_5", "pm10", "co2", "voc", "nox"])
+        """.trimIndent()
+
+        val request = Request.Builder()
+            .url("$influxUrl/api/v2/query?org=$influxOrg")
+            .addHeader("Authorization", "Token $influxToken")
+            .addHeader("Accept", "application/csv")
+            .addHeader("Content-Type", "application/vnd.flux")
+            .post(fluxQuery.toRequestBody("application/vnd.flux".toMediaType()))
+            .build()
+
+        try {
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return emptyList()
+                val body = response.body?.string() ?: return emptyList()
+                return parseHistoryResponse(body)
+            }
+        } catch (e: IOException) {
+            e.printStackTrace()
+            return emptyList()
+        }
+    }
+
+    private fun parseHistoryResponse(csv: String): List<HistoryItem> {
+        val items = mutableListOf<HistoryItem>()
+        val lines = csv.lines()
+        
+        // Header parsing
+        var timeIdx = -1
+        var pm25Idx = -1
+        var pm10Idx = -1
+        var co2Idx = -1
+        var vocIdx = -1
+        var noxIdx = -1
+
+        // ISO 8601 parser
+        val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US)
+        sdf.timeZone = TimeZone.getTimeZone("UTC")
+
+        for (line in lines) {
+            if (line.isBlank() || line.startsWith("#")) continue
+            
+            val cols = line.split(",")
+            
+            if (cols.contains("_time")) {
+                timeIdx = cols.indexOf("_time")
+                pm25Idx = cols.indexOf("pm2_5")
+                pm10Idx = cols.indexOf("pm10")
+                co2Idx = cols.indexOf("co2")
+                vocIdx = cols.indexOf("voc")
+                noxIdx = cols.indexOf("nox")
+                continue
+            }
+
+            if (timeIdx != -1 && cols.size > timeIdx) {
+                val timeStr = cols[timeIdx]
+                // Handle fractional seconds if present
+                val cleanTimeStr = if (timeStr.contains(".")) timeStr.substringBefore(".") else timeStr
+                // Handle Z if present (though SimpleDateFormat might need 'Z' in pattern or we strip it)
+                // Influx usually returns 2023-10-27T10:00:00Z. 
+                // Let's try to parse robustly.
+                
+                val time = try {
+                    // Remove Z if present for simple parsing, or assume UTC
+                    val t = cleanTimeStr.replace("Z", "")
+                    sdf.parse(t)?.time ?: 0L
+                } catch (e: Exception) {
+                    0L
+                }
+
+                if (time == 0L) continue
+
+                val fields = IaqCalculator.LatestFields()
+                if (pm25Idx != -1 && cols.size > pm25Idx) fields.pm25 = cols[pm25Idx].toFloatOrNull() ?: Float.NaN
+                if (pm10Idx != -1 && cols.size > pm10Idx) fields.pm10 = cols[pm10Idx].toFloatOrNull() ?: Float.NaN
+                if (co2Idx != -1 && cols.size > co2Idx) fields.co2 = cols[co2Idx].toFloatOrNull() ?: Float.NaN
+                if (vocIdx != -1 && cols.size > vocIdx) fields.voc = cols[vocIdx].toFloatOrNull() ?: Float.NaN
+                if (noxIdx != -1 && cols.size > noxIdx) fields.nox = cols[noxIdx].toFloatOrNull() ?: Float.NaN
+
+                items.add(HistoryItem(time, fields))
+            }
+        }
+        return items
     }
 }
