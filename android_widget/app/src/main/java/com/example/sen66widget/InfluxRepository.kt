@@ -213,4 +213,89 @@ object InfluxRepository {
         }
         return items
     }
+    fun fetchTrendData(context: Context, minutes: Int): Map<String, Float> {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val influxUrl = prefs.getString(PREF_INFLUX_URL, "") ?: ""
+        val influxOrg = prefs.getString(PREF_INFLUX_ORG, "") ?: ""
+        val influxBucket = prefs.getString(PREF_INFLUX_BUCKET, "") ?: ""
+        val influxToken = prefs.getString(PREF_INFLUX_TOKEN, "") ?: ""
+
+        if (influxUrl.isEmpty() || influxOrg.isEmpty() || influxBucket.isEmpty() || influxToken.isEmpty()) {
+            return emptyMap()
+        }
+
+        // Query: Get first and last value in the time window for each field
+        val fluxQuery = """
+            data = from(bucket: "$influxBucket")
+              |> range(start: -${minutes}m)
+              |> filter(fn: (r) => r["_measurement"] == "environment")
+              |> filter(fn: (r) => r["_field"] == "pm2_5" or r["_field"] == "pm10" or r["_field"] == "co2" or r["_field"] == "voc" or r["_field"] == "nox")
+            
+            first = data |> first() |> set(key: "_type", value: "first")
+            last = data |> last() |> set(key: "_type", value: "last")
+            
+            union(tables: [first, last])
+              |> keep(columns: ["_field", "_value", "_type"])
+        """.trimIndent()
+
+        val request = Request.Builder()
+            .url("$influxUrl/api/v2/query?org=$influxOrg")
+            .addHeader("Authorization", "Token $influxToken")
+            .addHeader("Accept", "application/csv")
+            .addHeader("Content-Type", "application/vnd.flux")
+            .post(fluxQuery.toRequestBody("application/vnd.flux".toMediaType()))
+            .build()
+
+        try {
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return emptyMap()
+                val body = response.body?.string() ?: return emptyMap()
+                return parseTrendResponse(body)
+            }
+        } catch (e: IOException) {
+            e.printStackTrace()
+            return emptyMap()
+        }
+    }
+
+    private fun parseTrendResponse(csv: String): Map<String, Float> {
+        val firstValues = mutableMapOf<String, Float>()
+        val lastValues = mutableMapOf<String, Float>()
+        
+        val lines = csv.lines()
+        var fieldIdx = -1
+        var valueIdx = -1
+        var typeIdx = -1
+
+        for (line in lines) {
+            if (line.isBlank() || line.startsWith("#")) continue
+            
+            val cols = line.split(",")
+            if (cols.contains("_field") && cols.contains("_value") && cols.contains("_type")) {
+                fieldIdx = cols.indexOf("_field")
+                valueIdx = cols.indexOf("_value")
+                typeIdx = cols.indexOf("_type")
+                continue
+            }
+
+            if (fieldIdx != -1 && valueIdx != -1 && typeIdx != -1 && cols.size > max(max(fieldIdx, valueIdx), typeIdx)) {
+                val field = cols[fieldIdx]
+                val value = cols[valueIdx].toFloatOrNull() ?: continue
+                val type = cols[typeIdx]
+                
+                if (type == "first") {
+                    firstValues[field] = value
+                } else if (type == "last") {
+                    lastValues[field] = value
+                }
+            }
+        }
+
+        val trends = mutableMapOf<String, Float>()
+        for ((field, last) in lastValues) {
+            val first = firstValues[field] ?: continue
+            trends[field] = last - first
+        }
+        return trends
+    }
 }

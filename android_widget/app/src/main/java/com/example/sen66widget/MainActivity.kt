@@ -17,6 +17,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var editInterval: TextInputEditText
     private lateinit var editMaxAge: TextInputEditText
     private lateinit var editChartHistoryHours: TextInputEditText
+    private lateinit var editTrendInterval: TextInputEditText
     private lateinit var btnSave: Button
 
     private lateinit var prefs: SharedPreferences
@@ -34,6 +35,7 @@ class MainActivity : AppCompatActivity() {
         editInterval = findViewById(R.id.edit_update_interval)
         editMaxAge = findViewById(R.id.edit_max_data_age)
         editChartHistoryHours = findViewById(R.id.edit_chart_history_hours)
+        editTrendInterval = findViewById(R.id.edit_trend_interval)
         btnSave = findViewById(R.id.btn_save)
 
         loadSettings()
@@ -51,6 +53,7 @@ class MainActivity : AppCompatActivity() {
         editInterval.setText(prefs.getInt(PREF_UPDATE_INTERVAL, 5).toString())
         editMaxAge.setText(prefs.getInt(PREF_MAX_DATA_AGE, 360).toString())
         editChartHistoryHours.setText(prefs.getInt(PREF_CHART_HISTORY_HOURS, 24).toString())
+        editTrendInterval.setText(prefs.getInt(PREF_TREND_INTERVAL, 10).toString())
     }
 
     private fun saveSettings() {
@@ -61,8 +64,9 @@ class MainActivity : AppCompatActivity() {
         val intervalStr = editInterval.text.toString().trim()
         val maxAgeStr = editMaxAge.text.toString().trim()
         val chartHistoryHoursStr = editChartHistoryHours.text.toString().trim()
+        val trendIntervalStr = editTrendInterval.text.toString().trim()
 
-        if (url.isEmpty() || org.isEmpty() || bucket.isEmpty() || token.isEmpty() || intervalStr.isEmpty() || maxAgeStr.isEmpty() || chartHistoryHoursStr.isEmpty()) {
+        if (url.isEmpty() || org.isEmpty() || bucket.isEmpty() || token.isEmpty() || intervalStr.isEmpty() || maxAgeStr.isEmpty() || chartHistoryHoursStr.isEmpty() || trendIntervalStr.isEmpty()) {
             Toast.makeText(this, "Please fill in all fields", Toast.LENGTH_SHORT).show()
             return
         }
@@ -70,6 +74,7 @@ class MainActivity : AppCompatActivity() {
         val interval = intervalStr.toIntOrNull()
         val maxAge = maxAgeStr.toIntOrNull()
         val chartHistoryHours = chartHistoryHoursStr.toIntOrNull()
+        val trendInterval = trendIntervalStr.toIntOrNull()
 
         if (interval == null || interval <= 0) {
             Toast.makeText(this, "Invalid interval", Toast.LENGTH_SHORT).show()
@@ -86,6 +91,11 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
+        if (trendInterval == null || trendInterval <= 0) {
+            Toast.makeText(this, "Invalid trend interval", Toast.LENGTH_SHORT).show()
+            return
+        }
+
         prefs.edit().apply {
             putString(PREF_INFLUX_URL, url)
             putString(PREF_INFLUX_ORG, org)
@@ -94,6 +104,7 @@ class MainActivity : AppCompatActivity() {
             putInt(PREF_UPDATE_INTERVAL, interval)
             putInt(PREF_MAX_DATA_AGE, maxAge)
             putInt(PREF_CHART_HISTORY_HOURS, chartHistoryHours)
+            putInt(PREF_TREND_INTERVAL, trendInterval)
             apply()
         }
 
@@ -102,6 +113,7 @@ class MainActivity : AppCompatActivity() {
         // Trigger widget update to apply new settings immediately
         WidgetProvider.updateAllWidgets(this)
         ChartWidgetProvider.updateAllWidgets(this)
+        TrendWidgetProvider.updateAllWidgets(this)
     }
 
     companion object {
@@ -113,5 +125,6 @@ class MainActivity : AppCompatActivity() {
         const val PREF_UPDATE_INTERVAL = "update_interval"
         const val PREF_MAX_DATA_AGE = "max_data_age"
         const val PREF_CHART_HISTORY_HOURS = "chart_history_hours"
+        const val PREF_TREND_INTERVAL = "trend_interval"
     }
 }
