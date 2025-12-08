@@ -119,7 +119,7 @@ class WidgetProvider : AppWidgetProvider() {
 
             // Fetch data in background
             CoroutineScope(Dispatchers.IO).launch {
-                val fields = InfluxRepository.fetchLatestFields(context)
+                val fields = InfluxRepository.getLatestFieldsSuspend(context)
                 val result = if (fields != null) IaqCalculator.computeDominantIndex(fields) else IaqCalculator.IaqResult(Float.NaN, "--")
 
                 withContext(Dispatchers.Main) {

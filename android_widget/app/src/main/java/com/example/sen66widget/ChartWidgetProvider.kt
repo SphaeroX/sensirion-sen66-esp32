@@ -120,7 +120,7 @@ class ChartWidgetProvider : AppWidgetProvider() {
                 val prefs = context.getSharedPreferences(MainActivity.PREFS_NAME, Context.MODE_PRIVATE)
                 val hours = prefs.getInt(MainActivity.PREF_CHART_HISTORY_HOURS, 24)
                 
-                val history = InfluxRepository.fetchHistoryData(context, hours)
+                val history = InfluxRepository.getHistoryDataSuspend(context, hours)
                 
                 // Process data: compute IAQ score for each point
                 val points = history.map { item ->

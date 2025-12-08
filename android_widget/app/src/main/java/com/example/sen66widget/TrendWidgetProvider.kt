@@ -35,7 +35,7 @@ class TrendWidgetProvider : AppWidgetProvider() {
             val minutes = prefs.getInt(PREF_TREND_INTERVAL, 10)
 
             CoroutineScope(Dispatchers.IO).launch {
-                val trends = InfluxRepository.fetchTrendData(context, minutes)
+                val trends = InfluxRepository.getTrendDataSuspend(context, minutes)
                 
                 // Find max increase
                 val maxTrend = trends.maxByOrNull { it.value }
