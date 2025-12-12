@@ -11,6 +11,59 @@
 Sen66 sen66(Wire);
 
 unsigned long lastSend = 0;
+unsigned long lastFanCleaning = 0;
+
+class VentilationDetector {
+public:
+  void addSample(float co2) {
+    if (isnan(co2))
+      return;
+
+    // Shift history
+    for (int i = VENTILATION_WINDOW_SIZE - 1; i > 0; i--) {
+      history[i] = history[i - 1];
+    }
+    history[0] = co2;
+
+    if (count < VENTILATION_WINDOW_SIZE) {
+      count++;
+    }
+  }
+
+  bool isVentilationDetected() {
+    if (count < 2)
+      return false;
+
+    // Find max value in history (excluding the current latest sample history[0]
+    // to allow comparison) Actually, we want to know if current value
+    // (history[0]) is significantly lower than RECENT max.
+    float maxVal = -1.0;
+    for (int i = 1; i < count; i++) {
+      if (history[i] > maxVal)
+        maxVal = history[i];
+    }
+
+    if (maxVal < 0)
+      return false; // Should not happen if count >= 2
+
+    float drop = maxVal - history[0];
+    if (drop >= VENTILATION_CO2_DROP_THRESHOLD) {
+      Serial.printf(
+          "Ventilation Detected! Drop: %.0f ppm (Max: %.0f -> Curr: %.0f)\n",
+          drop, maxVal, history[0]);
+      // Reset history to prevent multiple triggers for the same event?
+      // Or we rely on cooldown. Cooldown is safer.
+      return true;
+    }
+    return false;
+  }
+
+private:
+  float history[VENTILATION_WINDOW_SIZE];
+  int count = 0;
+};
+
+VentilationDetector ventilationDetector;
 
 static void wifiConnect() {
   WiFi.mode(WIFI_STA);
@@ -179,6 +232,24 @@ void loop() {
   Serial.printf("NC0.5=%.1f NC1.0=%.1f NC2.5=%.1f NC4.0=%.1f NC10=%.1f #/cm3 | "
                 "Status=0x%08lX\n",
                 nc.nc0_5, nc.nc1_0, nc.nc2_5, nc.nc4_0, nc.nc10_0, statusFlags);
+
+  // Ventilation Detection & Automatic Fan Cleaning
+  if (mv.valid_co2) {
+    ventilationDetector.addSample(mv.co2_ppm);
+    if (ventilationDetector.isVentilationDetected()) {
+      const unsigned long now = millis();
+      if (now - lastFanCleaning > FAN_CLEANING_COOLDOWN_MS ||
+          lastFanCleaning == 0) {
+        Serial.println("Triggering Fan Cleaning due to ventilation event...");
+        if (sen66.startFanCleaning()) {
+          Serial.println("Fan cleaning started.");
+          lastFanCleaning = now;
+        } else {
+          Serial.println("Failed to start fan cleaning.");
+        }
+      }
+    }
+  }
 
   const unsigned long now = millis();
   if (now - lastSend < MEASUREMENT_INTERVAL_MS) {
