@@ -58,6 +58,17 @@ template = f"""// generated from environment variables
 
 #define MEASUREMENT_INTERVAL_MS {get('MEASUREMENT_INTERVAL_MS', '20000')}UL
 
+// ===== OTA =====
+#define OTA_HOSTNAME "{get('OTA_HOSTNAME', 'sen66-esp32')}"
+#define OTA_PASSWORD "{get('OTA_PASSWORD', 'admin')}"
+
+// ===== Ventilation Detection =====
+
+#define VENTILATION_CO2_DROP_THRESHOLD {get('VENTILATION_CO2_DROP_THRESHOLD', '100')} // ppm
+#define VENTILATION_WINDOW_SIZE {get('VENTILATION_WINDOW_SIZE', '5')}          // number of samples
+#define FAN_CLEANING_COOLDOWN_MS {get('FAN_CLEANING_COOLDOWN_MS', '900000')}    // 15 minutes
+
+
 // ===== InfluxDB v2 setup =====
 #define INFLUXDB_URL \"{c_string(get('INFLUXDB_URL'))}\"
 #define INFLUXDB_ORG \"{c_string(get('INFLUXDB_ORG'))}\"

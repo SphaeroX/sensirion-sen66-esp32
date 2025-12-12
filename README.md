@@ -36,36 +36,34 @@ A mobile companion app.
 *   An InfluxDB v2 instance (cloud or self-hosted).
 *   WiFi credentials.
 
-### 2. Configuration (`include/config.h`)
-You need to create a configuration file to store your credentials. This file is ignored by git to keep your secrets safe.
+### 2. Configuration (`.env`)
+The project uses a `.env` file to manage configuration, which is automatically converted to `include/config.h` during the build process.
 
-1.  Navigate to the `include/` directory.
-2.  Create a new file named `config.h`.
-3.  Copy the following template and fill in your details:
+1.  Copy `.env.example` to `.env` in the project root.
+2.  Edit `.env` and fill in your credentials:
 
-```c
-#ifndef CONFIG_H
-#define CONFIG_H
+```ini
+# WiFi
+WIFI_SSID="YOUR_WIFI_SSID"
+WIFI_PASSWORD="YOUR_WIFI_PASSWORD"
 
-// WiFi Configuration
-#define WIFI_SSID "YOUR_WIFI_SSID"
-#define WIFI_PASSWORD "YOUR_WIFI_PASSWORD"
+# InfluxDB
+INFLUXDB_URL="https://eu-central-1-1.aws.cloud2.influxdata.com"
+INFLUXDB_ORG="YOUR_INFLUXDB_ORG"
+INFLUXDB_BUCKET="sen66"
+INFLUXDB_TOKEN="YOUR_INFLUXDB_TOKEN"
 
-// InfluxDB Configuration
-#define INFLUXDB_URL "https://eu-central-1-1.aws.cloud2.influxdata.com"
-#define INFLUXDB_ORG "YOUR_INFLUXDB_ORG"
-#define INFLUXDB_BUCKET "YOUR_INFLUXDB_BUCKET"
-#define INFLUXDB_TOKEN "YOUR_INFLUXDB_TOKEN"
+# OTA
+OTA_HOSTNAME="sen66-esp32"
+OTA_PASSWORD="admin"
 
-// OTA Update Configuration
-#define OTA_HOSTNAME "sen66-esp32"
-#define OTA_PASSWORD "admin"
-
-// Measurement Interval
-#define MEASUREMENT_INTERVAL_MS 60000
-
-#endif // CONFIG_H
+# Ventilation Detection
+VENTILATION_CO2_DROP_THRESHOLD=100
+VENTILATION_WINDOW_SIZE=5
+FAN_CLEANING_COOLDOWN_MS=900000
 ```
+**Note:** Do not create `include/config.h` manually, it will be overwritten.
+
 
 ### 3. Building and Flashing
 
