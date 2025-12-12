@@ -1,204 +1,97 @@
-# sensirion-sen66-esp32
+# Sensirion SEN66 Project
 
-This project targets the **Seeed Studio XIAO ESP32‑S3** using PlatformIO. It reads a **Sensirion SEN66** and streams measurements to **InfluxDB**.
+This project is a complete ecosystem for monitoring and visualizing air quality data using the Sensirion SEN66 sensor. It consists of four main components interacting with each other to provide real-time environment data.
 
-A companion Express.js dashboard located in `/dashboard` visualizes the data on mobile devices.
+## Components
+
+### 1. Sensor Node (`src/sen66`)
+The core of the project. It uses a **Seeed Studio XIAO ESP32-S3** controller connected to a **Sensirion SEN66** sensor.
+*   **Function**: Reads environmental data (PM1.0, PM2.5, PM4.0, PM10, VOC, NOx, CO2, Humidity, Temperature).
+*   **Connectivity**: Connects to WiFi and uploads all measured data to an **InfluxDB** instance.
+*   **OTA**: Supports Over-The-Air updates.
+
+### 2. Air Quality Lamp (`src/lamp`)
+A visual indicator for air quality.
+*   **Function**: Displays the current Air Quality Index (IAQ) using an LED ring.
+*   **Hardware**: ESP32 based controller with an LED ring (e.g., WS2812B) and optionally an OLED display.
+*   **Data Source**: Queries the latest data from InfluxDB to determine the color/status of the LEDs.
+
+### 3. Dashboard (`dashboard/`)
+A web application for data visualization.
+*   **Function**: Provides a comprehensive dashboard to view historical and real-time air quality data.
+*   **Hosting**: Designed to be hosted for free on **Azure App Service**.
+*   **Stack**: Node.js/Express backend that interfaces with InfluxDB.
+
+### 4. Android Widget (`android_widget/`)
+A mobile companion app.
+*   **Function**: An Android application that provides home screen widgets.
+*   **Features**: Displays current air quality metrics directly on your phone's home screen without opening the app.
 
 ---
-## Getting Started
 
-### 1. Clone the project
+## Installation & Configuration
 
-```bash
-git clone https://github.com/SphaeroX/sensirion-sen66-esp32.git
-cd sensirion-sen66-esp32
+### 1. Prerequisites
+*   PlatformIO installed (VS Code extension recommended).
+*   An InfluxDB v2 instance (cloud or self-hosted).
+*   WiFi credentials.
+
+### 2. Configuration (`include/config.h`)
+You need to create a configuration file to store your credentials. This file is ignored by git to keep your secrets safe.
+
+1.  Navigate to the `include/` directory.
+2.  Create a new file named `config.h`.
+3.  Copy the following template and fill in your details:
+
+```c
+#ifndef CONFIG_H
+#define CONFIG_H
+
+// WiFi Configuration
+#define WIFI_SSID "YOUR_WIFI_SSID"
+#define WIFI_PASSWORD "YOUR_WIFI_PASSWORD"
+
+// InfluxDB Configuration
+#define INFLUXDB_URL "https://eu-central-1-1.aws.cloud2.influxdata.com"
+#define INFLUXDB_ORG "YOUR_INFLUXDB_ORG"
+#define INFLUXDB_BUCKET "YOUR_INFLUXDB_BUCKET"
+#define INFLUXDB_TOKEN "YOUR_INFLUXDB_TOKEN"
+
+// OTA Update Configuration
+#define OTA_HOSTNAME "sen66-esp32"
+#define OTA_PASSWORD "admin"
+
+// Measurement Interval
+#define MEASUREMENT_INTERVAL_MS 60000
+
+#endif // CONFIG_H
 ```
 
-### 2. Configure credentials and channels
+### 3. Building and Flashing
 
-1. Copy the environment template and edit your values. All components read from this file.
+#### Sensor Node
+1.  Open the project in PlatformIO.
+2.  Select the `sen66` environment (if applicable, or default environment).
+3.  Connect your XIAO ESP32-S3.
+4.  Run **Upload**.
 
-   ```bash
-   cp .env.example .env
-   ```
-
-2. Load the variables before building or starting the dashboard:
-
-   ```bash
-   set -a; source .env; set +a
-   ```
-
-   The PlatformIO build will generate `include/config.h` automatically from these variables.
-
-### 3. I²C pins and speed
-
-Default I²C pins for XIAO ESP32‑S3 are `SDA = 6` and `SCL = 7`. If your wiring differs you can override pins and bus speed in `platformio.ini`.
-
-```ini
-; platformio.ini (snippet)
-[env:seeed_xiao_esp32s3]
-build_flags =
-  -DCORE_DEBUG_LEVEL=3
-  -DSEN66_I2C_SDA=6
-  -DSEN66_I2C_SCL=7
-  -DSEN66_I2C_FREQ=100000UL   ; use 400000UL for Fast Mode
-```
-
-### 4. Build and upload
-
-```bash
-platformio run --target upload
-```
-
-After upload open the serial monitor. You should see fresh readings and InfluxDB write confirmations.
+#### Lamp
+1.  Open the project in PlatformIO.
+2.  Target the `lamp` source code (check `platformio.ini` `src_dir` or environment settings if separated).
+3.  Connect your Lamp ESP32.
+4.  Run **Upload**.
 
 ---
 
-## InfluxDB & Dashboard Server
+## Deployment
 
-![Dashboard](images/dashboard.png)
+### Dashboard on Azure
+The `dashboard` folder contains a Node.js app ready for Azure.
+1.  Create a wrapper Web App on Azure (Free tier works).
+2.  Deploy the contents of the `dashboard/` folder.
+3.  Set the Environment Variables in Azure App Service configuration to match your InfluxDB credentials (check `dashboard/README.md` if available for specific env var names).
 
-This project streams sensor data to InfluxDB (v2). A Node/Express server under `dashboard/` queries InfluxDB on the server side and serves a mobile‑friendly web UI.
-
-- Data sink: InfluxDB v2 using `INFLUXDB_URL`, `INFLUXDB_ORG`, `INFLUXDB_BUCKET`, `INFLUXDB_TOKEN` from `.env`.
-- Server: Express.js + ApexCharts frontend in `dashboard/`.
-- Default view shows last 24h; you can change time range and resolution.
-
-Quick start for the dashboard server:
-
-```bash
-cd dashboard
-npm install
-npm start
-```
-
-The server listens on port 3000 by default and expects the same `.env` file at the repo root.
-
-See the detailed server documentation here: dashboard/README.md
-
----
-
-## What each value means
-
-### PM mass concentrations
-
-**PM1.0**, **PM2.5**, **PM4.0**, **PM10** measure the **mass** of airborne particles inside the respective size fractions. Units are **micrograms per cubic meter**. The sensor reports values for multiple size cuts which lets you see how much dust is present in different bands. A rise in PM2.5 often reflects smoke or fine dust. A rise in PM10 can reflect coarse dust.
-
-Key points
-
-* Mass is dominated by larger particles because mass scales with diameter cubed
-* Units: µg per m³
-* Good air typically shows low double digit or single digit values indoors
-
-### Number concentrations
-
-**NC0.5**, **NC1.0**, **NC2.5**, **NC4.0**, **NC10** measure **counts of particles** in each size band. Units are **particles per cubic centimeter** written as `#/cm³`.
-
-Key points
-
-* Number is dominated by smaller particles because they are more numerous
-* Units: particles per cm³
-* This metric responds strongly to ultrafine sources like cooking aerosols or sprays
-
-**PM vs NC**
-
-* PM answers the question how much particulate **mass** is in the air
-* NC answers the question how many **particles** are in the air
-* You can see high NC with low PM when there are many very small particles with tiny mass
-* You can see low NC with high PM when fewer but larger particles carry most of the mass
-
-### Relative Humidity and Temperature
-
-* **RH** is **relative humidity** in percent and shows how much water vapor is present compared to saturation at the same temperature
-* **Temperature** is in **degrees Celsius**
-
-These two help you correct interpretation of particle readings. Very high humidity can raise apparent particle mass due to hygroscopic growth in some environments.
-
-### VOC Index
-
-**VOC Index** is a unitless indicator derived from a gas sensor that responds to a broad range of **volatile organic compounds**. Values rise with higher estimated VOC exposure. Interpret the trend over minutes and hours rather than single samples.
-
-Typical use
-
-* Watch for spikes from cleaning agents or paints
-* Track decay after ventilation
-
-### NOx Index
-
-**NOx Index** is a unitless indicator related to oxidizing nitrogen compounds from sources like traffic or combustion. Higher values mean higher estimated exposure. Allow a short warm up after power up before you rely on the number.
-
-### CO₂
-
-**CO₂** is reported in **ppm**. It correlates with occupancy and ventilation. Lower is generally better indoors. Many people target values well below 1000 ppm for comfort.
-
-### Status flags
-
-A 32‑bit integer that encodes device status and data validity bits. Zero usually means no warnings. Non zero values can indicate temporary invalid data during warm up or maintenance events. You can log this field to catch rare issues.
-
-### Data validity in the library
-
-The driver checks CRC bytes and treats special raw codes as invalid. For example a raw value that equals the data type maximum is considered not available. Invalid readings become `NaN` in the printed output and are not sent to InfluxDB.
-
----
-
-## Hardware
-
-![Hardware](images/hardware.jpg)
-
-* **MCU**: Seeed Studio XIAO ESP32‑S3
-* **Sensor**: Sensirion SEN66
-* **I²C**: default pins SDA 6 and SCL 7 unless you override in `platformio.ini`
-* **Power**: XIAO has on board LiPo charging which is useful for portable logging
-
-Wire SEN66 I²C and power according to the datasheet. Keep leads short for clean signals.
-
----
-
-
-## Project structure
-
-* `src/` main application
-* `lib/` self written library `Sen66`
-* `include/` configuration headers
-* `dashboard/` Express.js server and web dashboard using InfluxDB
-* `platformio.ini` PlatformIO configuration
-
----
-
-## Deploying the dashboard to Azure
-
-The dashboard is an Express.js app and can run on **Azure App Service**.
-
-1. Install dependencies and run the test script:
-
-   ```bash
-   cd dashboard
-   npm install
-   npm test
-   ```
-
-2. Deploy using the Azure CLI:
-
-   ```bash
-   az login
-   az webapp up \
-       --runtime "node|18-lts" \
-       --name sen66-dashboard \
-       --resource-group <RESOURCE_GROUP> \
-       --src-path dashboard
-   ```
-
-3. Push the environment variables from your `.env` file:
-
-   ```bash
-   az webapp config appsettings set \
-       --name sen66-dashboard \
-       --resource-group <RESOURCE_GROUP> \
-       --settings $(cat .env | xargs)
-   ```
-
----
-
-## License
-
-This project is licensed under the MIT License. See `LICENSE` for details.
+### Android Widget
+1.  Open the `android_widget` project in **Android Studio**.
+2.  Build and install the APK on your Android device.
+3.  Add the widget to your home screen.
