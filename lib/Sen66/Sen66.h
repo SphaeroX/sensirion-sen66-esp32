@@ -49,6 +49,7 @@ public:
   bool begin(int sda = SEN66_I2C_SDA, int scl = SEN66_I2C_SCL,
              uint32_t freq = SEN66_I2C_FREQ);
   bool startMeasurement();
+  bool stopMeasurement();
   bool dataReady(bool &ready);
   bool readMeasuredValues(MeasuredValues &out);
   bool readNumberConcentration(NumberConcentration &out);
@@ -73,4 +74,6 @@ private:
   // Parse helpers
   static float scaleUInt16(uint16_t v, float scale, bool &valid);
   static float scaleInt16(int16_t v, float scale, bool &valid);
+
+  bool _measurementRunning = false;
 };

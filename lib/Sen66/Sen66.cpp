@@ -52,6 +52,15 @@ bool Sen66::startMeasurement() {
   if (!sendCommand(0x0021))
     return false; // Start Continuous Measurement (SEN6x)
   delay(50);      // execution time (ms)
+  _measurementRunning = true;
+  return true;
+}
+
+bool Sen66::stopMeasurement() {
+  if (!sendCommand(0x0104))
+    return false; // Stop Measurement (SEN6x)
+  delay(1000); // execution time (ms) - wait at least 1s before new measurement
+  _measurementRunning = false;
   return true;
 }
 
@@ -204,8 +213,26 @@ bool Sen66::readDeviceStatus(uint32_t &statusFlags) {
 }
 
 bool Sen66::startFanCleaning() {
+  // Save current state
+  bool wasRunning = _measurementRunning;
+
+  // Fan cleaning requires Idle mode.
+  // We try to stop measurement just in case.
+  stopMeasurement(); // This sets _measurementRunning = false
+
   if (!sendCommand(0x5607))
     return false; // Start Fan Cleaning
+
+  // Wait for cleaning to finish (required before restarting measurement)
+  delay(10000);
+
+  // Restore state
+  if (wasRunning) {
+    if (!startMeasurement()) {
+      return false; // Failed to restart
+    }
+  }
+
   return true;
 }
 

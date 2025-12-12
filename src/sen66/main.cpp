@@ -125,6 +125,16 @@ void setup() {
 
   sen66.begin();
 
+  delay(1000);
+
+  // Start fan cleaning (uncomment to enable on boot)
+  // stopMeasurement/restore is now handled inside startFanCleaning
+  if (sen66.startFanCleaning()) {
+    Serial.println("Fan cleaning started... (library handles wait)");
+  } else {
+    Serial.println("Fan cleaning failed");
+  }
+
   if (!sen66.startMeasurement()) {
     Serial.println("SEN66 startMeasurement() failed");
   }
@@ -134,12 +144,6 @@ void setup() {
   if (!sen66.setTemperatureOffsetParameters(0, 0, 0)) {
     Serial.println("SEN66 setTemperatureOffsetParameters() failed");
   }
-
-  // Optional: Start fan cleaning (uncomment to enable on boot)
-  // if (sen66.startFanCleaning()) {
-  //   Serial.println("Fan cleaning started... waiting 10s");
-  //   delay(10000);
-  // }
 
   wifiConnect();
   setupOTA();
@@ -241,12 +245,14 @@ void loop() {
       if (now - lastFanCleaning > FAN_CLEANING_COOLDOWN_MS ||
           lastFanCleaning == 0) {
         Serial.println("Triggering Fan Cleaning due to ventilation event...");
+        // stopMeasurement/restore is now integrated into startFanCleaning
         if (sen66.startFanCleaning()) {
-          Serial.println("Fan cleaning started.");
+          Serial.println("Fan cleaning finished (state restored).");
           lastFanCleaning = now;
         } else {
           Serial.println("Failed to start fan cleaning.");
         }
+        // No need to manual startMeasurement here
       }
     }
   }
