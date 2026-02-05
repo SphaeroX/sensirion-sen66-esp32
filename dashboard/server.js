@@ -375,4 +375,16 @@ app.get('/api/iaq/history', async (req, res) => {
   }
 });
 
+// Fan cleaning events endpoint
+app.get('/api/events/fan_cleaning', async (req, res) => {
+  try {
+    const range = (req.query.range && String(req.query.range)) || '-24h';
+    const flux = `from(bucket:"${bucket}") |> range(start:${range}) |> filter(fn:(r)=>r._measurement=="events" and r.type=="fan_cleaning")`;
+    const rows = await queryApi.collectRows(flux);
+    res.json(rows.map(r => ({ time: r._time, value: r._value })));
+  } catch (err) {
+    res.status(500).json({ error: err.message || String(err) });
+  }
+});
+
 app.listen(port, () => console.log(`Dashboard listening on port ${port}`));

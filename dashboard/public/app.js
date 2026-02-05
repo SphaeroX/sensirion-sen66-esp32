@@ -1,6 +1,7 @@
 const SETTINGS_KEY = 'aq_dashboard_settings';
 const CURRENT_REFRESH_MS = 5000;
 const HISTORY_REFRESH_MS = 60000;
+const FAN_CLEANING_COLOR = '#ff9800';
 const SERIES_COLORS = {
   co2: '#e74c3c',
   temperature: '#f39c12',
@@ -224,6 +225,42 @@ async function refreshCurrent() {
   }
 }
 
+async function loadFanCleaningEvents(range, signal) {
+  try {
+    const url = `/api/events/fan_cleaning?range=${encodeURIComponent(range)}`;
+    const events = await fetchJson(url, { signal });
+    return events || [];
+  } catch (error) {
+    if (error.name !== 'AbortError') {
+      console.error('Failed to load fan cleaning events', error);
+    }
+    return [];
+  }
+}
+
+function buildAnnotations(events) {
+  return events.map((event, index) => ({
+    x: new Date(event.time).getTime(),
+    strokeDashArray: 0,
+    borderColor: FAN_CLEANING_COLOR,
+    borderWidth: 2,
+    label: {
+      borderColor: FAN_CLEANING_COLOR,
+      style: {
+        color: '#fff',
+        background: FAN_CLEANING_COLOR,
+        fontSize: '12px',
+        fontWeight: 600
+      },
+      text: '🧹 Fan Cleaning',
+      orientation: 'vertical',
+      position: 'top',
+      offsetX: 0,
+      offsetY: 0
+    }
+  }));
+}
+
 async function refreshHistory() {
   if (historyRequestController) historyRequestController.abort();
   const controller = new AbortController();
@@ -231,10 +268,19 @@ async function refreshHistory() {
 
   try {
     const { range, every, fields } = getHistorySelection();
-    const rows = await loadHistoryData(range, every, fields, controller.signal);
+    const [rows, events] = await Promise.all([
+      loadHistoryData(range, every, fields, controller.signal),
+      loadFanCleaningEvents(range, controller.signal)
+    ]);
     if (controller.signal.aborted) return;
     const series = buildSeries(rows, fields);
+    const annotations = buildAnnotations(events);
     chart.updateSeries(series);
+    chart.updateOptions({
+      annotations: {
+        xaxis: annotations
+      }
+    });
   } catch (error) {
     if (error.name !== 'AbortError') {
       console.error('Failed to refresh history', error);
@@ -269,7 +315,16 @@ function registerEventHandlers() {
 }
 
 const chart = new ApexCharts(document.querySelector('#chart'), {
-  chart: { type: 'line', height: '100%', animations: { enabled: true } },
+  chart: { 
+    type: 'line', 
+    height: '100%', 
+    animations: { enabled: true },
+    events: {
+      annotationMouseEnter: function(event, chartContext, config) {
+        chartContext.toggleDataPointSelection(0, config.dataPointIndex);
+      }
+    }
+  },
   series: [],
   stroke: { width: 2, curve: 'smooth' },
   xaxis: { type: 'datetime', labels: { datetimeUTC: false } },
@@ -282,6 +337,9 @@ const chart = new ApexCharts(document.querySelector('#chart'), {
     x: {
       formatter: (val) => DATE_TIME_FORMATTER.format(new Date(val))
     }
+  },
+  annotations: {
+    xaxis: []
   }
 });
 
