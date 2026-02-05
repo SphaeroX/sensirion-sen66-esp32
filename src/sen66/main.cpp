@@ -28,31 +28,35 @@ public:
     if (count < VENTILATION_WINDOW_SIZE) {
       count++;
     }
+
+    // Update peak value (highest CO2 seen recently)
+    if (co2 > peakValue) {
+      peakValue = co2;
+      peakAge = 0;
+    } else {
+      peakAge++;
+    }
+
+    // Reset peak if it's too old (no longer "recent")
+    if (peakAge >= VENTILATION_WINDOW_SIZE) {
+      peakValue = co2;
+      peakAge = 0;
+    }
   }
 
   bool isVentilationDetected() {
     if (count < 2)
       return false;
 
-    // Find max value in history (excluding the current latest sample history[0]
-    // to allow comparison) Actually, we want to know if current value
-    // (history[0]) is significantly lower than RECENT max.
-    float maxVal = -1.0;
-    for (int i = 1; i < count; i++) {
-      if (history[i] > maxVal)
-        maxVal = history[i];
-    }
-
-    if (maxVal < 0)
-      return false; // Should not happen if count >= 2
-
-    float drop = maxVal - history[0];
+    // Calculate drop from recent peak to current value
+    float drop = peakValue - history[0];
     if (drop >= VENTILATION_CO2_DROP_THRESHOLD) {
       Serial.printf(
-          "Ventilation Detected! Drop: %.0f ppm (Max: %.0f -> Curr: %.0f)\n",
-          drop, maxVal, history[0]);
-      // Reset history to prevent multiple triggers for the same event?
-      // Or we rely on cooldown. Cooldown is safer.
+          "Ventilation Detected! Drop: %.0f ppm (Peak: %.0f -> Curr: %.0f)\n",
+          drop, peakValue, history[0]);
+      // Reset peak to prevent multiple triggers for same ventilation event
+      peakValue = history[0];
+      peakAge = 0;
       return true;
     }
     return false;
@@ -61,6 +65,8 @@ public:
 private:
   float history[VENTILATION_WINDOW_SIZE];
   int count = 0;
+  float peakValue = 0;
+  int peakAge = 0;
 };
 
 VentilationDetector ventilationDetector;
@@ -193,6 +199,22 @@ static void sendToInflux(const Sen66::MeasuredValues &mv,
   http.end();
 }
 
+static void sendFanCleaningEventToInflux() {
+  if (WiFi.status() != WL_CONNECTED)
+    return;
+  HTTPClient http;
+  String url = String(INFLUXDB_URL) +
+               "/api/v2/write?bucket=" + INFLUXDB_BUCKET +
+               "&org=" + INFLUXDB_ORG;
+  String line = String("events,type=fan_cleaning value=1");
+  http.begin(url);
+  http.addHeader("Authorization", String("Token ") + INFLUXDB_TOKEN);
+  http.addHeader("Content-Type", "text/plain; charset=utf-8");
+  int code = http.POST(line);
+  Serial.printf("[InfluxDB] Fan Cleaning Event HTTP %d\n", code);
+  http.end();
+}
+
 void loop() {
   ArduinoOTA.handle();
   bool ready = false;
@@ -248,6 +270,7 @@ void loop() {
         // stopMeasurement/restore is now integrated into startFanCleaning
         if (sen66.startFanCleaning()) {
           Serial.println("Fan cleaning finished (state restored).");
+          sendFanCleaningEventToInflux();
           lastFanCleaning = now;
         } else {
           Serial.println("Failed to start fan cleaning.");
