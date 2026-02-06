@@ -210,6 +210,25 @@ async function loadHistoryData(range, every, fields, signal) {
                          'ext_cloud_cover','ext_weather_code','ext_pm10','ext_pm2_5','ext_co','ext_no2',
                          'ext_so2','ext_o3','ext_eu_aqi','ext_us_aqi'];
   
+  // Mapping von ext_ Feldnamen zu den tatsächlichen InfluxDB Feldnamen
+  const externalFieldMapping = {
+    'ext_temperature': 'temperature',
+    'ext_humidity': 'humidity',
+    'ext_pressure': 'pressure',
+    'ext_wind_speed': 'wind_speed',
+    'ext_wind_dir': 'wind_direction',
+    'ext_cloud_cover': 'cloud_cover',
+    'ext_weather_code': 'weather_code',
+    'ext_pm10': 'pm10',
+    'ext_pm2_5': 'pm2_5',
+    'ext_co': 'co',
+    'ext_no2': 'no2',
+    'ext_so2': 'so2',
+    'ext_o3': 'o3',
+    'ext_eu_aqi': 'eu_aqi',
+    'ext_us_aqi': 'us_aqi'
+  };
+  
   const wantsIndex = fields.filter(f => indexFields.includes(f));
   const wantsIAQ = fields.includes('iaq');
   const wantsExternal = fields.filter(f => externalFields.includes(f));
@@ -218,14 +237,17 @@ async function loadHistoryData(range, every, fields, signal) {
   const historyUrl = baseFields.length ? `/api/history?${buildHistoryParams(range, every, baseFields)}` : null;
   const iaqUrl = wantsIAQ ? `/api/iaq/history?${buildHistoryParams(range, every)}` : null;
   const idxUrl = wantsIndex.length ? `/api/index/history?${buildHistoryParams(range, every, wantsIndex)}` : null;
-  const weatherUrl = wantsExternal.length ? `/api/weather/history?${buildHistoryParams(range, every, wantsExternal)}` : null;
+  
+  // Konvertiere ext_ Feldnamen zu InfluxDB Feldnamen für die API-Anfrage
+  const weatherFields = wantsExternal.map(f => externalFieldMapping[f]).filter(Boolean);
+  const weatherUrl = weatherFields.length ? `/api/weather/history?${buildHistoryParams(range, every, weatherFields)}` : null;
 
   const historyPromise = historyUrl ? fetchJson(historyUrl, { signal }) : Promise.resolve([]);
   const iaqPromise = iaqUrl ? fetchJson(iaqUrl, { signal }) : Promise.resolve([]);
   const idxPromise = idxUrl ? fetchJson(idxUrl, { signal }) : Promise.resolve([]);
   const weatherPromise = weatherUrl ? fetchJson(weatherUrl, { signal }) : Promise.resolve([]);
 
-  const [rowsBase, rowsIaq, rowsIdx, rowsWeather] = await Promise.all([
+  const [rowsBase, rowsIaq, rowsIdx, rowsWeatherRaw] = await Promise.all([
     historyPromise.catch(error => {
       if (error.name === 'AbortError') throw error;
       console.error('Failed to load base history data', error);
@@ -247,6 +269,18 @@ async function loadHistoryData(range, every, fields, signal) {
       return [];
     })
   ]);
+
+  // Erstelle reverse mapping (InfluxDB name -> ext_ name)
+  const reverseMapping = {};
+  for (const [extName, influxName] of Object.entries(externalFieldMapping)) {
+    reverseMapping[influxName] = extName;
+  }
+  
+  // Mappe die zurückgegebenen Wetterdaten von InfluxDB-Namen zu ext_-Namen
+  const rowsWeather = (rowsWeatherRaw || []).map(row => ({
+    ...row,
+    _field: reverseMapping[row._field] || row._field
+  }));
 
   return [...(rowsBase || []), ...(rowsIaq || []), ...(rowsIdx || []), ...(rowsWeather || [])];
 }
