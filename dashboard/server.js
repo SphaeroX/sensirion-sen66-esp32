@@ -387,4 +387,42 @@ app.get('/api/events/fan_cleaning', async (req, res) => {
   }
 });
 
+// External weather data endpoint
+app.get('/api/weather/history', async (req, res) => {
+  try {
+    const range = (req.query.range && String(req.query.range)) || '-24h';
+    const every = req.query.every ? String(req.query.every) : '';
+    const fields = (req.query.fields ? String(req.query.fields).split(',') : []).map(f => f.trim()).filter(Boolean);
+    
+    if (!fields.length) {
+      return res.json([]);
+    }
+    
+    const fieldFilter = fields.map(f => `r._field == "${f}"`).join(' or ');
+    
+    let flux = `from(bucket:"${bucket}") |> range(start:${range}) |> filter(fn:(r)=>r._measurement=="external_weather" and (${fieldFilter}))`;
+    if (every) {
+      flux += ` |> aggregateWindow(every: ${every}, fn: mean, createEmpty: false)`;
+    }
+    
+    const rows = await queryApi.collectRows(flux);
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message || String(err) });
+  }
+});
+
+// Current external weather data
+app.get('/api/weather/current', async (req, res) => {
+  try {
+    const query = `from(bucket:"${bucket}") |> range(start:-5m) |> filter(fn:(r)=>r._measurement=="external_weather") |> last()`;
+    const rows = await queryApi.collectRows(query);
+    const result = {};
+    rows.forEach(r => { result[r._field] = r._value; });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message || String(err) });
+  }
+});
+
 app.listen(port, () => console.log(`Dashboard listening on port ${port}`));

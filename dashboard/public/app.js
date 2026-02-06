@@ -20,7 +20,23 @@ const SERIES_COLORS = {
   nc10: '#34495e',
   co2_index: '#ff6f61',
   voc_index: '#27ae60',
-  pm_index: '#8e44ad'
+  pm_index: '#8e44ad',
+  // External weather fields
+  ext_temperature: '#ff9800',
+  ext_humidity: '#03a9f4',
+  ext_pressure: '#9c27b0',
+  ext_wind_speed: '#795548',
+  ext_wind_dir: '#607d8b',
+  ext_cloud_cover: '#757575',
+  ext_weather_code: '#8bc34a',
+  ext_pm10: '#e91e63',
+  ext_pm2_5: '#673ab7',
+  ext_co: '#ff5722',
+  ext_no2: '#009688',
+  ext_so2: '#ffc107',
+  ext_o3: '#00bcd4',
+  ext_eu_aqi: '#f44336',
+  ext_us_aqi: '#2196f3'
 };
 
 // Use browser locale/timezone for date formatting
@@ -43,7 +59,17 @@ const dom = (() => {
     pmxCat: document.getElementById('pmx-cat'),
     vocIdx: document.getElementById('vocIdx'),
     co2Idx: document.getElementById('co2Idx'),
-    pmIdx: document.getElementById('pmIdx')
+    pmIdx: document.getElementById('pmIdx'),
+    // External weather displays
+    extEuAqi: document.getElementById('extEuAqi'),
+    extUsAqi: document.getElementById('extUsAqi'),
+    extTemp: document.getElementById('extTemp'),
+    extHum: document.getElementById('extHum'),
+    extPressure: document.getElementById('extPressure'),
+    extWindSpeed: document.getElementById('extWindSpeed'),
+    extWindDir: document.getElementById('extWindDir'),
+    extPm25: document.getElementById('extPm25'),
+    extPm10: document.getElementById('extPm10')
   };
 
   return {
@@ -134,7 +160,7 @@ function getHistorySelection() {
   return { range, every, fields };
 }
 
-function updateCurrentDisplay(current, iaq, pmx, idx) {
+function updateCurrentDisplay(current, iaq, pmx, idx, weather) {
   const data = current || {};
   dom.displays.co2.textContent = data.co2 ?? '-';
   dom.displays.temp.textContent = data.temperature ?? '-';
@@ -155,6 +181,18 @@ function updateCurrentDisplay(current, iaq, pmx, idx) {
   if (dom.displays.vocIdx) dom.displays.vocIdx.textContent = vi;
   if (dom.displays.co2Idx) dom.displays.co2Idx.textContent = ci;
   if (dom.displays.pmIdx) dom.displays.pmIdx.textContent = pi;
+
+  // External weather data
+  const w = weather || {};
+  if (dom.displays.extEuAqi) dom.displays.extEuAqi.textContent = w.eu_aqi ?? '-';
+  if (dom.displays.extUsAqi) dom.displays.extUsAqi.textContent = w.us_aqi ?? '-';
+  if (dom.displays.extTemp) dom.displays.extTemp.textContent = w.temperature ?? '-';
+  if (dom.displays.extHum) dom.displays.extHum.textContent = w.humidity ?? '-';
+  if (dom.displays.extPressure) dom.displays.extPressure.textContent = w.pressure ?? '-';
+  if (dom.displays.extWindSpeed) dom.displays.extWindSpeed.textContent = w.wind_speed ?? '-';
+  if (dom.displays.extWindDir) dom.displays.extWindDir.textContent = w.wind_direction ?? '-';
+  if (dom.displays.extPm25) dom.displays.extPm25.textContent = w.pm2_5 ?? '-';
+  if (dom.displays.extPm10) dom.displays.extPm10.textContent = w.pm10 ?? '-';
 }
 
 async function fetchJson(url, { signal } = {}) {
@@ -168,19 +206,26 @@ async function fetchJson(url, { signal } = {}) {
 
 async function loadHistoryData(range, every, fields, signal) {
   const indexFields = ['voc_index','co2_index','pm_index'];
+  const externalFields = ['ext_temperature','ext_humidity','ext_pressure','ext_wind_speed','ext_wind_dir',
+                         'ext_cloud_cover','ext_weather_code','ext_pm10','ext_pm2_5','ext_co','ext_no2',
+                         'ext_so2','ext_o3','ext_eu_aqi','ext_us_aqi'];
+  
   const wantsIndex = fields.filter(f => indexFields.includes(f));
   const wantsIAQ = fields.includes('iaq');
-  const baseFields = fields.filter(f => f !== 'iaq' && !indexFields.includes(f));
+  const wantsExternal = fields.filter(f => externalFields.includes(f));
+  const baseFields = fields.filter(f => f !== 'iaq' && !indexFields.includes(f) && !externalFields.includes(f));
 
   const historyUrl = baseFields.length ? `/api/history?${buildHistoryParams(range, every, baseFields)}` : null;
   const iaqUrl = wantsIAQ ? `/api/iaq/history?${buildHistoryParams(range, every)}` : null;
   const idxUrl = wantsIndex.length ? `/api/index/history?${buildHistoryParams(range, every, wantsIndex)}` : null;
+  const weatherUrl = wantsExternal.length ? `/api/weather/history?${buildHistoryParams(range, every, wantsExternal)}` : null;
 
   const historyPromise = historyUrl ? fetchJson(historyUrl, { signal }) : Promise.resolve([]);
   const iaqPromise = iaqUrl ? fetchJson(iaqUrl, { signal }) : Promise.resolve([]);
   const idxPromise = idxUrl ? fetchJson(idxUrl, { signal }) : Promise.resolve([]);
+  const weatherPromise = weatherUrl ? fetchJson(weatherUrl, { signal }) : Promise.resolve([]);
 
-  const [rowsBase, rowsIaq, rowsIdx] = await Promise.all([
+  const [rowsBase, rowsIaq, rowsIdx, rowsWeather] = await Promise.all([
     historyPromise.catch(error => {
       if (error.name === 'AbortError') throw error;
       console.error('Failed to load base history data', error);
@@ -195,10 +240,15 @@ async function loadHistoryData(range, every, fields, signal) {
       if (error.name === 'AbortError') throw error;
       console.error('Failed to load index history data', error);
       return [];
+    }),
+    weatherPromise.catch(error => {
+      if (error.name === 'AbortError') throw error;
+      console.error('Failed to load weather history data', error);
+      return [];
     })
   ]);
 
-  return [...(rowsBase || []), ...(rowsIaq || []), ...(rowsIdx || [])];
+  return [...(rowsBase || []), ...(rowsIaq || []), ...(rowsIdx || []), ...(rowsWeather || [])];
 }
 
 let currentRequestController;
@@ -209,15 +259,16 @@ async function refreshCurrent() {
   const controller = new AbortController();
   currentRequestController = controller;
   try {
-    const [current, iaq, pmx, idx] = await Promise.all([
+    const [current, iaq, pmx, idx, weather] = await Promise.all([
       fetchJson('/api/current', { signal: controller.signal }),
       fetchJson('/api/iaq/current', { signal: controller.signal }),
       fetchJson('/api/pmx/current', { signal: controller.signal }),
-      fetchJson('/api/index/current', { signal: controller.signal })
+      fetchJson('/api/index/current', { signal: controller.signal }),
+      fetchJson('/api/weather/current', { signal: controller.signal })
     ]);
 
     if (controller.signal.aborted) return;
-    updateCurrentDisplay(current, iaq, pmx, idx);
+    updateCurrentDisplay(current, iaq, pmx, idx, weather);
   } catch (error) {
     if (error.name !== 'AbortError') {
       console.error('Failed to refresh current data', error);

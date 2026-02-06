@@ -80,6 +80,23 @@
           <label><input type="checkbox" class="field" value="voc" /> VOC (Index)</label>
           <label><input type="checkbox" class="field" value="nox" /> NOx (Index)</label>
         </div>
+        <div class="control-row fields" style="align-items: center; border-top: 1px solid #ddd; padding-top: 10px; margin-top: 10px;">
+          <span class="row-title">Externes Wetter:</span>
+          <label><input type="checkbox" class="field" value="ext_temperature" /> Ext. Temperatur (°C)</label>
+          <label><input type="checkbox" class="field" value="ext_humidity" /> Ext. Luftfeuchte (%)</label>
+          <label><input type="checkbox" class="field" value="ext_pressure" /> Luftdruck (hPa)</label>
+          <label><input type="checkbox" class="field" value="ext_wind_speed" /> Wind (km/h)</label>
+          <label><input type="checkbox" class="field" value="ext_wind_dir" /> Windrichtung (°)</label>
+          <label><input type="checkbox" class="field" value="ext_cloud_cover" /> Bewölkung (%)</label>
+          <label><input type="checkbox" class="field" value="ext_pm10" /> Ext. PM10 (µg/m³)</label>
+          <label><input type="checkbox" class="field" value="ext_pm2_5" /> Ext. PM2.5 (µg/m³)</label>
+          <label><input type="checkbox" class="field" value="ext_co" /> CO (µg/m³)</label>
+          <label><input type="checkbox" class="field" value="ext_no2" /> NO₂ (µg/m³)</label>
+          <label><input type="checkbox" class="field" value="ext_so2" /> SO₂ (µg/m³)</label>
+          <label><input type="checkbox" class="field" value="ext_o3" /> O₃ (µg/m³)</label>
+          <label><input type="checkbox" class="field" value="ext_eu_aqi" /> EU AQI</label>
+          <label><input type="checkbox" class="field" value="ext_us_aqi" /> US AQI</label>
+        </div>
       </div>
     </section>
     <section id="current">
@@ -94,6 +111,14 @@
         <li>Temperature: <span id="temp">-</span> °C</li>
         <li>Humidity: <span id="hum">-</span> %</li>
         <li>Taupunkt: <span id="dew">-</span> °C</li>
+      </ul>
+      <h3>Externes Wetter (Open-Meteo)</h3>
+      <ul>
+        <li>EU AQI: <span id="extEuAqi">-</span> | US AQI: <span id="extUsAqi">-</span></li>
+        <li>Ext. Temperatur: <span id="extTemp">-</span> °C | Ext. Luftfeuchte: <span id="extHum">-</span> %</li>
+        <li>Luftdruck: <span id="extPressure">-</span> hPa</li>
+        <li>Wind: <span id="extWindSpeed">-</span> km/h | Richtung: <span id="extWindDir">-</span>°</li>
+        <li>Ext. PM2.5: <span id="extPm25">-</span> µg/m³ | Ext. PM10: <span id="extPm10">-</span> µg/m³</li>
       </ul>
     </section>
     <section id="chart-section">
