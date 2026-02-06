@@ -74,6 +74,13 @@ template = f"""// generated from environment variables
 #define INFLUXDB_ORG \"{c_string(get('INFLUXDB_ORG'))}\"
 #define INFLUXDB_BUCKET \"{c_string(get('INFLUXDB_BUCKET'))}\"
 #define INFLUXDB_TOKEN \"{c_string(get('INFLUXDB_TOKEN'))}\"
+
+// ===== External Weather/AQI Configuration =====
+// Set to 1 to enable weather data fetching from Open-Meteo (free, no API key needed)
+#define WEATHER_ENABLED {1 if get('WEATHER_ENABLED', 'true').lower() in ('true', '1', 'yes') else 0}
+// Location coordinates - find your city at: https://open-meteo.com/en/docs
+#define WEATHER_LATITUDE \"{c_string(get('WEATHER_LATITUDE', '52.52'))}\"
+#define WEATHER_LONGITUDE \"{c_string(get('WEATHER_LONGITUDE', '13.405'))}\"
 """
 
 CONFIG.write_text(template, encoding="utf-8")

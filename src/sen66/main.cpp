@@ -2,6 +2,7 @@
 #include "Sen66.h"
 #include "config.h"
 #include <Arduino.h>
+#include <ArduinoJson.h>
 #include <ArduinoOTA.h>
 #include <HTTPClient.h>
 #include <WiFi.h>
@@ -12,6 +13,30 @@ Sen66 sen66(Wire);
 
 unsigned long lastSend = 0;
 unsigned long lastFanCleaning = 0;
+
+// ===== External Weather Data Structure =====
+struct WeatherData {
+  float temperature;
+  float humidity;
+  float pressure;
+  float windSpeed;
+  int windDirection;
+  int cloudCover;
+  int weatherCode;
+  float pm10;
+  float pm2_5;
+  float carbonMonoxide;
+  float nitrogenDioxide;
+  float sulphurDioxide;
+  float ozone;
+  int europeanAqi;
+  int usAqi;
+  bool valid;
+  unsigned long lastFetch;
+};
+
+WeatherData lastWeatherData;
+const unsigned long WEATHER_CACHE_MS = 300000; // 5 minutes cache
 
 class VentilationDetector {
 public:
@@ -173,13 +198,16 @@ static float dewPoint(float tempC, float humidityRH) {
 
 static void sendToInflux(const Sen66::MeasuredValues &mv,
                          const Sen66::NumberConcentration &nc,
-                         uint32_t statusFlags) {
+                         uint32_t statusFlags, const WeatherData &wd) {
   if (WiFi.status() != WL_CONNECTED)
     return;
+  
   HTTPClient http;
   String url = String(INFLUXDB_URL) +
                "/api/v2/write?bucket=" + INFLUXDB_BUCKET +
                "&org=" + INFLUXDB_ORG;
+  
+  // Send local sensor data to 'environment' measurement
   const float dp = dewPoint(mv.temperature_c, mv.humidity_rh);
   String line =
       String("environment") + " pm1_0=" + f2s(mv.pm1_0, 1) +
@@ -191,12 +219,46 @@ static void sendToInflux(const Sen66::MeasuredValues &mv,
       ",nc1_0=" + f2s(nc.nc1_0, 1) + ",nc2_5=" + f2s(nc.nc2_5, 1) +
       ",nc4_0=" + f2s(nc.nc4_0, 1) + ",nc10=" + f2s(nc.nc10_0, 1) +
       ",status=" + String((unsigned long)statusFlags);
+  
   http.begin(url);
   http.addHeader("Authorization", String("Token ") + INFLUXDB_TOKEN);
   http.addHeader("Content-Type", "text/plain; charset=utf-8");
   int code = http.POST(line);
-  Serial.printf("[InfluxDB] HTTP %d\n", code);
+  Serial.printf("[InfluxDB] Environment HTTP %d\n", code);
   http.end();
+  
+  // Send external weather data to 'external_weather' measurement (if available)
+  if (wd.valid) {
+    delay(10); // Small delay between requests
+    
+    String weatherLine = String("external_weather");
+    bool hasData = false;
+    
+    if (!isnan(wd.temperature)) { weatherLine += " temperature=" + f2s(wd.temperature, 2); hasData = true; }
+    if (!isnan(wd.humidity)) { weatherLine += (hasData ? "," : " ") + String("humidity=") + f2s(wd.humidity, 1); hasData = true; }
+    if (!isnan(wd.pressure)) { weatherLine += (hasData ? "," : " ") + String("pressure=") + f2s(wd.pressure, 2); hasData = true; }
+    if (!isnan(wd.windSpeed)) { weatherLine += (hasData ? "," : " ") + String("wind_speed=") + f2s(wd.windSpeed, 2); hasData = true; }
+    if (wd.windDirection != 0) { weatherLine += (hasData ? "," : " ") + String("wind_direction=") + String(wd.windDirection); hasData = true; }
+    if (wd.cloudCover != 0) { weatherLine += (hasData ? "," : " ") + String("cloud_cover=") + String(wd.cloudCover); hasData = true; }
+    if (wd.weatherCode != 0) { weatherLine += (hasData ? "," : " ") + String("weather_code=") + String(wd.weatherCode); hasData = true; }
+    if (!isnan(wd.pm10)) { weatherLine += (hasData ? "," : " ") + String("pm10=") + f2s(wd.pm10, 1); hasData = true; }
+    if (!isnan(wd.pm2_5)) { weatherLine += (hasData ? "," : " ") + String("pm2_5=") + f2s(wd.pm2_5, 1); hasData = true; }
+    if (!isnan(wd.carbonMonoxide)) { weatherLine += (hasData ? "," : " ") + String("co=") + f2s(wd.carbonMonoxide, 2); hasData = true; }
+    if (!isnan(wd.nitrogenDioxide)) { weatherLine += (hasData ? "," : " ") + String("no2=") + f2s(wd.nitrogenDioxide, 2); hasData = true; }
+    if (!isnan(wd.sulphurDioxide)) { weatherLine += (hasData ? "," : " ") + String("so2=") + f2s(wd.sulphurDioxide, 2); hasData = true; }
+    if (!isnan(wd.ozone)) { weatherLine += (hasData ? "," : " ") + String("o3=") + f2s(wd.ozone, 2); hasData = true; }
+    if (wd.europeanAqi != 0) { weatherLine += (hasData ? "," : " ") + String("eu_aqi=") + String(wd.europeanAqi); hasData = true; }
+    if (wd.usAqi != 0) { weatherLine += (hasData ? "," : " ") + String("us_aqi=") + String(wd.usAqi); hasData = true; }
+    
+    if (hasData) {
+      http.begin(url);
+      http.addHeader("Authorization", String("Token ") + INFLUXDB_TOKEN);
+      http.addHeader("Content-Type", "text/plain; charset=utf-8");
+      int weatherCode = http.POST(weatherLine);
+      Serial.printf("[InfluxDB] External Weather HTTP %d\n", weatherCode);
+      http.end();
+    }
+  }
 }
 
 static void sendFanCleaningEventToInflux() {
@@ -213,6 +275,116 @@ static void sendFanCleaningEventToInflux() {
   int code = http.POST(line);
   Serial.printf("[InfluxDB] Fan Cleaning Event HTTP %d\n", code);
   http.end();
+}
+
+// ===== Weather Data Fetching =====
+static WeatherData fetchWeatherData() {
+  WeatherData wd = {};
+  wd.valid = false;
+  
+  #if !WEATHER_ENABLED
+    return wd;
+  #endif
+  
+  // Check if cache is still valid
+  if (lastWeatherData.valid && 
+      (millis() - lastWeatherData.lastFetch) < WEATHER_CACHE_MS) {
+    Serial.println("[Weather] Using cached data");
+    return lastWeatherData;
+  }
+  
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("[Weather] WiFi not connected");
+    return wd;
+  }
+  
+  HTTPClient http;
+  
+  // Fetch current weather
+  String weatherUrl = String("https://api.open-meteo.com/v1/forecast?latitude=") +
+                      WEATHER_LATITUDE + "&longitude=" + WEATHER_LONGITUDE +
+                      "&current=temperature_2m,relative_humidity_2m,pressure_msl," +
+                      "wind_speed_10m,wind_direction_10m,weather_code,cloud_cover";
+  
+  Serial.println("[Weather] Fetching weather data...");
+  http.begin(weatherUrl);
+  http.setTimeout(10000);
+  int httpCode = http.GET();
+  
+  if (httpCode != 200) {
+    Serial.printf("[Weather] Weather API failed: %d\n", httpCode);
+    http.end();
+    return wd;
+  }
+  
+  String payload = http.getString();
+  http.end();
+  
+  // Parse weather JSON
+  JsonDocument doc;
+  DeserializationError error = deserializeJson(doc, payload);
+  
+  if (error) {
+    Serial.printf("[Weather] JSON parse error: %s\n", error.c_str());
+    return wd;
+  }
+  
+  JsonObject current = doc["current"];
+  wd.temperature = current["temperature_2m"] | NAN;
+  wd.humidity = current["relative_humidity_2m"] | NAN;
+  wd.pressure = current["pressure_msl"] | NAN;
+  wd.windSpeed = current["wind_speed_10m"] | NAN;
+  wd.windDirection = current["wind_direction_10m"] | 0;
+  wd.weatherCode = current["weather_code"] | 0;
+  wd.cloudCover = current["cloud_cover"] | 0;
+  
+  // Fetch air quality data
+  String aqiUrl = String("https://air-quality-api.open-meteo.com/v1/air-quality?latitude=") +
+                  WEATHER_LATITUDE + "&longitude=" + WEATHER_LONGITUDE +
+                  "&current=pm10,pm2_5,carbon_monoxide,nitrogen_dioxide," +
+                  "sulphur_dioxide,ozone,european_aqi,us_aqi";
+  
+  Serial.println("[Weather] Fetching AQI data...");
+  http.begin(aqiUrl);
+  http.setTimeout(10000);
+  httpCode = http.GET();
+  
+  if (httpCode == 200) {
+    payload = http.getString();
+    http.end();
+    
+    JsonDocument aqiDoc;
+    error = deserializeJson(aqiDoc, payload);
+    
+    if (!error) {
+      JsonObject aqiCurrent = aqiDoc["current"];
+      wd.pm10 = aqiCurrent["pm10"] | NAN;
+      wd.pm2_5 = aqiCurrent["pm2_5"] | NAN;
+      wd.carbonMonoxide = aqiCurrent["carbon_monoxide"] | NAN;
+      wd.nitrogenDioxide = aqiCurrent["nitrogen_dioxide"] | NAN;
+      wd.sulphurDioxide = aqiCurrent["sulphur_dioxide"] | NAN;
+      wd.ozone = aqiCurrent["ozone"] | NAN;
+      wd.europeanAqi = aqiCurrent["european_aqi"] | 0;
+      wd.usAqi = aqiCurrent["us_aqi"] | 0;
+    } else {
+      Serial.printf("[Weather] AQI JSON parse error: %s\n", error.c_str());
+    }
+  } else {
+    Serial.printf("[Weather] AQI API failed: %d\n", httpCode);
+    http.end();
+  }
+  
+  wd.valid = true;
+  wd.lastFetch = millis();
+  lastWeatherData = wd;
+  
+  Serial.println("[Weather] Data fetched successfully");
+  Serial.printf("[Weather] Temp=%.1fC Humidity=%.0f%% Pressure=%.1fhPa\n", 
+                wd.temperature, wd.humidity, wd.pressure);
+  Serial.printf("[Weather] EU AQI=%d US AQI=%d PM2.5=%.1f PM10=%.1f\n",
+                wd.europeanAqi, wd.usAqi, wd.pm2_5, wd.pm10);
+  
+  return wd;
 }
 
 void loop() {
@@ -292,5 +464,8 @@ void loop() {
   if (WiFi.status() != WL_CONNECTED)
     return;
 
-  sendToInflux(mv, nc, statusFlags);
+  // Fetch external weather data
+  WeatherData wd = fetchWeatherData();
+
+  sendToInflux(mv, nc, statusFlags, wd);
 }

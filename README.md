@@ -93,3 +93,23 @@ The `dashboard` folder contains a Node.js app ready for Azure.
 1.  Open the `android_widget` project in **Android Studio**.
 2.  Build and install the APK on your Android device.
 3.  Add the widget to your home screen.
+
+---
+
+## Troubleshooting
+
+### Flashing Error: "A fatal error occurred: No serial data received."
+
+If you encounter this error when trying to flash the ESP32:
+
+**Solution:**
+
+1.  **Disconnect** the controller from USB
+2.  **Hold down** the **BOOT** button (on the XIAO ESP32-S3, this is the small button next to the USB-C port)
+3.  While holding BOOT, **connect** the controller to USB
+4.  **Start the upload** process in PlatformIO (or your IDE)
+5.  Keep holding the BOOT button until you see the message **"Looking for port..."** or similar in the upload logs
+6.  **Release** the BOOT button
+7.  The upload should now proceed successfully
+
+**Why this works:** The ESP32 needs to be in bootloader mode to accept new firmware. Holding BOOT during power-on forces it into this mode.
