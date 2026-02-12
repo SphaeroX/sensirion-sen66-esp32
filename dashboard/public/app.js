@@ -81,6 +81,7 @@ const dom = (() => {
     controlsToggle: document.getElementById('controls-toggle'),
     controlsContent: document.getElementById('controls-content'),
     fieldCheckboxes: Array.from(document.querySelectorAll('input.field')),
+    showEvents: document.getElementById('show-events'),
     displays
   };
 })();
@@ -94,7 +95,8 @@ function saveSettings() {
     preset: dom.preset.value,
     rangeInput: dom.rangeInput.value,
     every: dom.every.value,
-    fields: getSelectedFields()
+    fields: getSelectedFields(),
+    showEvents: dom.showEvents ? dom.showEvents.checked : true
   };
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
 }
@@ -110,6 +112,9 @@ function loadSettings() {
         dom.fieldCheckboxes.forEach(cb => {
           cb.checked = stored.fields.includes(cb.value);
         });
+      }
+      if (dom.showEvents && typeof stored.showEvents === 'boolean') {
+        dom.showEvents.checked = stored.showEvents;
       }
     }
   } catch (error) {
@@ -353,13 +358,15 @@ async function refreshHistory() {
 
   try {
     const { range, every, fields } = getHistorySelection();
+    const showEvents = dom.showEvents ? dom.showEvents.checked : true;
+    
     const [rows, events] = await Promise.all([
       loadHistoryData(range, every, fields, controller.signal),
-      loadFanCleaningEvents(range, controller.signal)
+      showEvents ? loadFanCleaningEvents(range, controller.signal) : Promise.resolve([])
     ]);
     if (controller.signal.aborted) return;
     const series = buildSeries(rows, fields);
-    const annotations = buildAnnotations(events);
+    const annotations = showEvents ? buildAnnotations(events) : [];
     chart.updateSeries(series);
     chart.updateOptions({
       annotations: {
@@ -397,6 +404,12 @@ function registerEventHandlers() {
     saveSettings();
     refreshHistory();
   }));
+  if (dom.showEvents) {
+    dom.showEvents.addEventListener('change', () => {
+      saveSettings();
+      refreshHistory();
+    });
+  }
 }
 
 const chart = new ApexCharts(document.querySelector('#chart'), {
