@@ -360,36 +360,42 @@ async function refreshHistory() {
     const { range, every, fields } = getHistorySelection();
     const showEvents = dom.showEvents ? dom.showEvents.checked : true;
     
-    // Aktuellen Zoom-Zustand speichern (falls vorhanden)
-    let zoomMin = null;
-    let zoomMax = null;
-    if (chart.w && chart.w.globals) {
-      zoomMin = chart.w.globals.minX;
-      zoomMax = chart.w.globals.maxX;
-    }
-    const hasZoom = zoomMin !== null && zoomMax !== null && 
-                    chart.w.globals.minX !== chart.w.globals.initialMinX &&
-                    chart.w.globals.maxX !== chart.w.globals.initialMaxX;
-    
     const [rows, events] = await Promise.all([
       loadHistoryData(range, every, fields, controller.signal),
       showEvents ? loadFanCleaningEvents(range, controller.signal) : Promise.resolve([])
     ]);
     if (controller.signal.aborted) return;
+
+    // Zoom-Zustand direkt vor dem Update speichern (nach Datenladen)
+    let zoomMin = null;
+    let zoomMax = null;
+    let hasZoom = false;
+    if (chart.w && chart.w.globals) {
+      zoomMin = chart.w.globals.minX;
+      zoomMax = chart.w.globals.maxX;
+      hasZoom = zoomMin !== null && zoomMax !== null && 
+                typeof chart.w.globals.initialMinX !== 'undefined' &&
+                typeof chart.w.globals.initialMaxX !== 'undefined' &&
+                zoomMin !== chart.w.globals.initialMinX &&
+                zoomMax !== chart.w.globals.initialMaxX;
+    }
+    
     const series = buildSeries(rows, fields);
     const annotations = showEvents ? buildAnnotations(events) : [];
     
-    // Series aktualisieren ohne Zoom zu verlieren
-    await chart.updateSeries(series, false);
+    // Optionen und Series in einem Aufruf aktualisieren, um einzelne Updates zu vermeiden
     await chart.updateOptions({
+      series: series,
       annotations: {
         xaxis: annotations
       }
     }, false);
     
-    // Zoom wiederherstellen wenn vorher vorhanden
+    // Zoom nach dem Update wiederherstellen (mit kleinem Timeout damit Chart gerendert ist)
     if (hasZoom && zoomMin !== null && zoomMax !== null) {
-      chart.zoomX(zoomMin, zoomMax);
+      setTimeout(() => {
+        chart.zoomX(zoomMin, zoomMax);
+      }, 0);
     }
   } catch (error) {
     if (error.name !== 'AbortError') {
