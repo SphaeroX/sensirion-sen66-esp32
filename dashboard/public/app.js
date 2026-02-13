@@ -360,6 +360,17 @@ async function refreshHistory() {
     const { range, every, fields } = getHistorySelection();
     const showEvents = dom.showEvents ? dom.showEvents.checked : true;
     
+    // Aktuellen Zoom-Zustand speichern (falls vorhanden)
+    let zoomMin = null;
+    let zoomMax = null;
+    if (chart.w && chart.w.globals) {
+      zoomMin = chart.w.globals.minX;
+      zoomMax = chart.w.globals.maxX;
+    }
+    const hasZoom = zoomMin !== null && zoomMax !== null && 
+                    chart.w.globals.minX !== chart.w.globals.initialMinX &&
+                    chart.w.globals.maxX !== chart.w.globals.initialMaxX;
+    
     const [rows, events] = await Promise.all([
       loadHistoryData(range, every, fields, controller.signal),
       showEvents ? loadFanCleaningEvents(range, controller.signal) : Promise.resolve([])
@@ -367,12 +378,19 @@ async function refreshHistory() {
     if (controller.signal.aborted) return;
     const series = buildSeries(rows, fields);
     const annotations = showEvents ? buildAnnotations(events) : [];
-    chart.updateSeries(series);
-    chart.updateOptions({
+    
+    // Series aktualisieren ohne Zoom zu verlieren
+    await chart.updateSeries(series, false);
+    await chart.updateOptions({
       annotations: {
         xaxis: annotations
       }
-    });
+    }, false);
+    
+    // Zoom wiederherstellen wenn vorher vorhanden
+    if (hasZoom && zoomMin !== null && zoomMax !== null) {
+      chart.zoomX(zoomMin, zoomMax);
+    }
   } catch (error) {
     if (error.name !== 'AbortError') {
       console.error('Failed to refresh history', error);
