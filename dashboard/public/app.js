@@ -351,6 +351,11 @@ function buildAnnotations(events) {
   }));
 }
 
+// Gespeicherter Zoom-Zustand (wird über chart events aktualisiert)
+let userZoomMin = null;
+let userZoomMax = null;
+let isUserZoomed = false;
+
 async function refreshHistory() {
   if (historyRequestController) historyRequestController.abort();
   const controller = new AbortController();
@@ -365,38 +370,36 @@ async function refreshHistory() {
       showEvents ? loadFanCleaningEvents(range, controller.signal) : Promise.resolve([])
     ]);
     if (controller.signal.aborted) return;
-
-    // Zoom-Zustand direkt vor dem Update speichern (nach Datenladen)
-    let zoomMin = null;
-    let zoomMax = null;
-    let hasZoom = false;
-    if (chart.w && chart.w.globals) {
-      zoomMin = chart.w.globals.minX;
-      zoomMax = chart.w.globals.maxX;
-      hasZoom = zoomMin !== null && zoomMax !== null && 
-                typeof chart.w.globals.initialMinX !== 'undefined' &&
-                typeof chart.w.globals.initialMaxX !== 'undefined' &&
-                zoomMin !== chart.w.globals.initialMinX &&
-                zoomMax !== chart.w.globals.initialMaxX;
-    }
     
     const series = buildSeries(rows, fields);
     const annotations = showEvents ? buildAnnotations(events) : [];
     
-    // Optionen und Series in einem Aufruf aktualisieren, um einzelne Updates zu vermeiden
-    await chart.updateOptions({
+    // Zoom über xaxis.min/max direkt in updateOptions einbetten
+    const opts = {
       series: series,
       annotations: {
         xaxis: annotations
       }
-    }, false);
+    };
     
-    // Zoom nach dem Update wiederherstellen (mit kleinem Timeout damit Chart gerendert ist)
-    if (hasZoom && zoomMin !== null && zoomMax !== null) {
-      setTimeout(() => {
-        chart.zoomX(zoomMin, zoomMax);
-      }, 0);
+    if (isUserZoomed && userZoomMin !== null && userZoomMax !== null) {
+      opts.xaxis = {
+        type: 'datetime',
+        labels: { datetimeUTC: false },
+        min: userZoomMin,
+        max: userZoomMax
+      };
+    } else {
+      // Kein Zoom - xaxis ohne feste Grenzen, damit ApexCharts auto-skaliert
+      opts.xaxis = {
+        type: 'datetime',
+        labels: { datetimeUTC: false },
+        min: undefined,
+        max: undefined
+      };
     }
+    
+    await chart.updateOptions(opts, false, false);
   } catch (error) {
     if (error.name !== 'AbortError') {
       console.error('Failed to refresh history', error);
@@ -416,9 +419,25 @@ function registerEventHandlers() {
   dom.preset.addEventListener('change', () => {
     updateCustomVisibility();
     saveSettings();
+    // Zoom zurücksetzen bei Preset-Wechsel (neuer Datenbereich)
+    userZoomMin = null;
+    userZoomMax = null;
+    isUserZoomed = false;
   });
-  dom.every.addEventListener('change', saveSettings);
-  dom.rangeInput.addEventListener('input', saveSettings);
+  dom.every.addEventListener('change', () => {
+    saveSettings();
+    // Zoom zurücksetzen bei Aggregationsänderung
+    userZoomMin = null;
+    userZoomMax = null;
+    isUserZoomed = false;
+  });
+  dom.rangeInput.addEventListener('input', () => {
+    saveSettings();
+    // Zoom zurücksetzen bei Range-Änderung
+    userZoomMin = null;
+    userZoomMax = null;
+    isUserZoomed = false;
+  });
   dom.refresh.addEventListener('click', () => {
     saveSettings();
     refreshCurrent();
@@ -442,6 +461,25 @@ const chart = new ApexCharts(document.querySelector('#chart'), {
     height: '100%', 
     animations: { enabled: true },
     events: {
+      zoomed: function(chartContext, { xaxis }) {
+        if (xaxis && xaxis.min != null && xaxis.max != null) {
+          userZoomMin = xaxis.min;
+          userZoomMax = xaxis.max;
+          isUserZoomed = true;
+        }
+      },
+      scrolled: function(chartContext, { xaxis }) {
+        if (xaxis && xaxis.min != null && xaxis.max != null) {
+          userZoomMin = xaxis.min;
+          userZoomMax = xaxis.max;
+          isUserZoomed = true;
+        }
+      },
+      beforeResetZoom: function() {
+        userZoomMin = null;
+        userZoomMax = null;
+        isUserZoomed = false;
+      },
       annotationMouseEnter: function(event, chartContext, config) {
         chartContext.toggleDataPointSelection(0, config.dataPointIndex);
       }
